@@ -1,4 +1,5 @@
 use bevy::{prelude::*, utils::petgraph::matrix_graph::Zero};
+use bevy_rapier2d::prelude::*;
 
 use super::{PlayerShip, ShipEngine};
 use crate::{Inertia, CAMERA_OFFSET};
@@ -30,7 +31,7 @@ pub fn move_player_ship(
         x_dir += 1.;
     }
 
-    let mut vec = Vec3::new(x_dir, y_dir, 0.);
+    let mut vec = Vec2::new(x_dir, y_dir);
 
     if vec.length() > 0. {
         vec = vec.normalize();
@@ -65,10 +66,12 @@ pub fn follow_player_ship(
     }
 }
 
-pub fn apply_ship_engine(mut query: Query<(&mut Inertia, &ShipEngine)>, time: Res<Time>) {
-    for (mut inertia, engine) in query.iter_mut() {
-        inertia.velocity = inertia
-            .velocity
+pub fn apply_ship_engine(mut query: Query<(&mut Velocity, &ShipEngine)>, time: Res<Time>) {
+    for (mut velocity, engine) in query.iter_mut() {
+        velocity.linvel = velocity
+            .linvel
             .lerp(engine.target_velocity, engine.power * time.delta_seconds());
+
+        velocity.angvel = 0.;
     }
 }

@@ -1,6 +1,7 @@
 use std::f32::consts::PI;
 
 use bevy::prelude::*;
+use bevy_rapier2d::prelude::*;
 
 use super::{PlayerShip, ShipEngine};
 use crate::{utils::drawing::arc, Inertia, LineList, LineMaterial};
@@ -29,7 +30,9 @@ pub fn spawn_player(
             ..default()
         },
         PlayerShip,
-        Inertia::default(),
         ShipEngine { power: 25., ..Default::default() },
+        RigidBody::Dynamic,
+        Velocity::default(),
+        Collider::ball(1.),
     ));
 }

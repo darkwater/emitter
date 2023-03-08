@@ -17,6 +17,7 @@ use bevy::{
         },
     },
 };
+use bevy_rapier2d::prelude::*;
 
 use crate::player::PlayerPlugin;
 
@@ -34,9 +35,10 @@ fn main() {
         .insert_resource(Msaa::Off)
         .add_plugins(DefaultPlugins)
         .add_plugin(MaterialPlugin::<LineMaterial>::default())
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0))
         .add_startup_system(setup)
+        .add_startup_system(disable_gravity)
         .add_system(cycle_msaa)
-        .add_system(apply_inertia)
         .add_plugin(PlayerPlugin)
         .run();
 }
@@ -44,6 +46,10 @@ fn main() {
 #[derive(Component, Default)]
 pub struct Inertia {
     pub velocity: Vec3,
+}
+
+fn disable_gravity(mut conf: ResMut<RapierConfiguration>) {
+    conf.gravity = Vec2::ZERO;
 }
 
 fn setup(
@@ -67,37 +73,55 @@ fn setup(
         ],
     }));
 
-    commands.spawn(MaterialMeshBundle {
-        mesh: triangle.clone(),
-        transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.))
-            .with_translation(Vec3::X * -15. + Vec3::Y * -15.),
-        material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-        ..default()
-    });
+    let collider = Collider::polyline(vec![Vec2::Y * 10., Vec2::ZERO, Vec2::X * 10.], None);
 
-    commands.spawn(MaterialMeshBundle {
-        mesh: triangle.clone(),
-        transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.5))
-            .with_translation(Vec3::X * 15. + Vec3::Y * -15.),
-        material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-        ..default()
-    });
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle.clone(),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.))
+                .with_translation(Vec3::X * -15. + Vec3::Y * -15.),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
 
-    commands.spawn(MaterialMeshBundle {
-        mesh: triangle.clone(),
-        transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.))
-            .with_translation(Vec3::X * 15. + Vec3::Y * 15.),
-        material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-        ..default()
-    });
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle.clone(),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.5))
+                .with_translation(Vec3::X * 15. + Vec3::Y * -15.),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
 
-    commands.spawn(MaterialMeshBundle {
-        mesh: triangle,
-        transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.5))
-            .with_translation(Vec3::X * -15. + Vec3::Y * 15.),
-        material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-        ..default()
-    });
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle.clone(),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.))
+                .with_translation(Vec3::X * 15. + Vec3::Y * 15.),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
+
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle,
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.5))
+                .with_translation(Vec3::X * -15. + Vec3::Y * 15.),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
 
     // camera
     commands.spawn((

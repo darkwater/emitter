@@ -8,7 +8,7 @@ pub struct PlayerShip;
 
 #[derive(Component, Default)]
 pub struct ShipEngine {
-    pub target_velocity: Vec3,
+    pub target_velocity: Vec2,
     pub power: f32,
 }
 
