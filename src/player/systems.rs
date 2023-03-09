@@ -1,17 +1,17 @@
-use bevy::{prelude::*, utils::petgraph::matrix_graph::Zero};
-use bevy_rapier2d::prelude::*;
+use bevy::prelude::*;
+use bevy_rapier3d::prelude::*;
 
-use super::{PlayerShip, ShipEngine};
-use crate::{Inertia, CAMERA_OFFSET};
+use super::{PlayerAimTarget, PlayerShip, ShipEngine};
+use crate::{
+    bullet::Bullet,
+    utils::{look_at_2d::LookAt2d, zlock::ZLocked},
+    LineList, LineMaterial, CAMERA_OFFSET,
+};
 
 pub fn move_player_ship(
     input: Res<Input<KeyCode>>,
-    mut query: Query<(&mut ShipEngine, &mut Transform), With<PlayerShip>>,
-    mut window_q: Query<&mut Window>,
-    time: Res<Time>,
+    mut query: Query<&mut ShipEngine, With<PlayerShip>>,
 ) {
-    let window = window_q.single_mut();
-
     let mut x_dir = 0.;
     let mut y_dir = 0.;
 
@@ -31,25 +31,14 @@ pub fn move_player_ship(
         x_dir += 1.;
     }
 
-    let mut vec = Vec2::new(x_dir, y_dir);
+    let mut vec = Vec3::new(x_dir, y_dir, 0.);
 
     if vec.length() > 0. {
         vec = vec.normalize();
     }
 
-    for (mut engine, mut transform) in query.iter_mut() {
+    for mut engine in query.iter_mut() {
         engine.target_velocity = vec * 25.;
-
-        if let Some(cursor_pos) = window.cursor_position() {
-            let center = Vec2::new(window.width() / 2., window.height() / 2.);
-            let target = Vec2::new(cursor_pos.x, cursor_pos.y) - center;
-
-            let angle = Vec2::X.angle_between(target);
-
-            if angle.is_normal() || angle.is_zero() {
-                transform.rotation = Quat::from_rotation_z(angle);
-            }
-        }
     }
 }
 
@@ -72,6 +61,76 @@ pub fn apply_ship_engine(mut query: Query<(&mut Velocity, &ShipEngine)>, time: R
             .linvel
             .lerp(engine.target_velocity, engine.power * time.delta_seconds());
 
-        velocity.angvel = 0.;
+        velocity.angvel = Vec3::ZERO;
     }
+}
+
+pub fn shoot(
+    input: ResMut<Input<MouseButton>>,
+    mut query: Query<(&Transform, &PlayerShip)>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<LineMaterial>>,
+) {
+    if input.just_pressed(MouseButton::Left) {
+        for (transform, _) in query.iter_mut() {
+            let direction = transform.right();
+
+            commands.spawn((
+                MaterialMeshBundle {
+                    mesh: meshes.add(Mesh::from(LineList {
+                        lines: vec![(Vec3::X * -0.5, Vec3::X * 0.5)],
+                    })),
+                    transform: *transform,
+                    // .with_translation(transform.translation + direction),
+                    material: materials.add(LineMaterial { color: Color::RED * 5. }),
+                    ..default()
+                },
+                RigidBody::Dynamic,
+                Velocity {
+                    linvel: direction * 50.,
+                    angvel: Vec3::ZERO,
+                },
+                ZLocked { angular: true },
+                Bullet { damage: 1. },
+            ));
+        }
+    }
+}
+
+pub fn move_aim_target(
+    window: Query<&Window>,
+    camera: Query<(&Camera, &GlobalTransform)>,
+    mut player_aim_target: Query<&mut Transform, With<PlayerAimTarget>>,
+) {
+    let window = window.single();
+    let (camera, camera_transform) = camera.single();
+    let mut player_aim_target = player_aim_target.single_mut();
+
+    let Some(cursor_position) = window.cursor_position() else {
+        return;
+    };
+
+    let Some(ray) = camera
+        .viewport_to_world(camera_transform, cursor_position) else {
+            return;
+        };
+
+    let Some(distance) = ray.intersect_plane(Vec3::ZERO, Vec3::Z) else {
+        return;
+    };
+
+    let position = ray.get_point(distance);
+
+    player_aim_target.translation = position;
+}
+
+pub fn aim_player_ship(
+    mut player_ship: Query<&mut Transform, (With<PlayerShip>, Without<PlayerAimTarget>)>,
+    player_aim_target: Query<&Transform, (With<PlayerAimTarget>, Without<PlayerShip>)>,
+) {
+    let mut player_ship = player_ship.single_mut();
+    let player_aim_target = player_aim_target.single();
+
+    player_ship.look_at_2d(player_aim_target.translation);
 }

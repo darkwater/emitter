@@ -6,6 +6,7 @@ use bevy::{
     core_pipeline::{
         bloom::BloomSettings, clear_color::ClearColorConfig, tonemapping::Tonemapping,
     },
+    log::LogPlugin,
     pbr::{MaterialPipeline, MaterialPipelineKey},
     prelude::*,
     reflect::TypeUuid,
@@ -17,13 +18,22 @@ use bevy::{
         },
     },
 };
-use bevy_rapier2d::prelude::*;
+use bevy_hanabi::{prelude::*, EffectAsset};
+use bevy_rapier3d::prelude::*;
 
-use crate::player::PlayerPlugin;
+use crate::{
+    bullet::BulletPlugin, damageable::despawn_if_dead, player::PlayerPlugin,
+    utils::zlock::ZLockPlugin,
+};
 
+mod bullet;
+mod collision_groups;
+mod damageable;
 mod player;
 mod utils {
     pub mod drawing;
+    pub mod look_at_2d;
+    pub mod zlock;
 }
 
 const CAMERA_OFFSET: Vec3 = Vec3::new(0., -5., 50.);
@@ -33,23 +43,86 @@ fn main() {
 
     App::new()
         .insert_resource(Msaa::Off)
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(LogPlugin {
+            level: bevy::log::Level::INFO,
+            filter: "emitter=trace,wgpu=warn".to_string(),
+        }))
         .add_plugin(MaterialPlugin::<LineMaterial>::default())
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0))
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(HanabiPlugin)
         .add_startup_system(setup)
         .add_startup_system(disable_gravity)
+        .add_startup_system(setup_particles)
         .add_system(cycle_msaa)
+        .add_system(toggle_debug_render)
+        .add_system(despawn_if_dead)
         .add_plugin(PlayerPlugin)
+        .add_plugin(BulletPlugin)
+        .add_plugin(ZLockPlugin)
         .run();
 }
 
-#[derive(Component, Default)]
-pub struct Inertia {
-    pub velocity: Vec3,
+fn disable_gravity(mut conf: ResMut<RapierConfiguration>) {
+    conf.gravity = Vec3::ZERO;
 }
 
-fn disable_gravity(mut conf: ResMut<RapierConfiguration>) {
-    conf.gravity = Vec2::ZERO;
+fn toggle_debug_render(
+    mut debug_render: ResMut<DebugRenderContext>,
+    input: Res<Input<MouseButton>>,
+) {
+    debug_render.enabled = input.pressed(MouseButton::Right);
+}
+
+fn setup_particles(mut effects: ResMut<Assets<EffectAsset>>, mut commands: Commands) {
+    let mut color_gradient1 = Gradient::new();
+    color_gradient1.add_key(0.0, Vec4::new(100.0, 0.0, 0.0, 1.0));
+    color_gradient1.add_key(0.1, Vec4::new(50.0, 0.0, 0.0, 1.0));
+    color_gradient1.add_key(0.9, Vec4::new(20.0, 0.0, 0.0, 1.0));
+    color_gradient1.add_key(1.0, Vec4::new(2.0, 0.0, 0.0, 0.0));
+
+    let mut size_gradient1 = Gradient::new();
+    size_gradient1.add_key(0.0, Vec2::splat(0.10));
+    size_gradient1.add_key(0.3, Vec2::splat(0.05));
+    size_gradient1.add_key(1.0, Vec2::splat(0.0));
+
+    let effect1 = effects.add(
+        EffectAsset {
+            name: "firework".to_string(),
+            capacity: 32768,
+            spawner: Spawner::once(50.0.into(), false),
+            ..Default::default()
+        }
+        .init(InitPositionSphereModifier {
+            center: Vec3::ZERO,
+            radius: 0.4,
+            dimension: ShapeDimension::Volume,
+        })
+        .init(InitVelocitySphereModifier {
+            center: Vec3::ZERO,
+            // Give a bit of variation by randomizing the initial speed
+            speed: Value::Uniform((1., 5.)),
+        })
+        .init(InitLifetimeModifier {
+            // Give a bit of variation by randomizing the lifetime per particle
+            lifetime: Value::Uniform((0.2, 0.8)),
+        })
+        .init(InitAgeModifier {
+            // Give a bit of variation by randomizing the age per particle. This will control the
+            // starting color and starting size of particles.
+            age: Value::Uniform((0.0, 0.07)),
+        })
+        // .update(LinearDragModifier { drag: 5. })
+        // .update(AccelModifier::constant(Vec3::new(0., -8., 0.)))
+        .render(ColorOverLifetimeModifier { gradient: color_gradient1 })
+        .render(SizeOverLifetimeModifier { gradient: size_gradient1 }),
+    );
+
+    commands.spawn((Name::new("firework"), ParticleEffectBundle {
+        effect: ParticleEffect::new(effect1),
+        transform: Transform::IDENTITY,
+        ..Default::default()
+    }));
 }
 
 fn setup(
@@ -73,13 +146,23 @@ fn setup(
         ],
     }));
 
-    let collider = Collider::polyline(vec![Vec2::Y * 10., Vec2::ZERO, Vec2::X * 10.], None);
+    let collider = Collider::trimesh(
+        vec![
+            Vec3::Z,
+            -Vec3::Z,
+            Vec3::X * 10. + Vec3::Z,
+            Vec3::X * 10. + -Vec3::Z,
+            Vec3::Y * 10. + Vec3::Z,
+            Vec3::Y * 10. + -Vec3::Z,
+        ],
+        vec![[0, 2, 1], [1, 2, 3], [4, 0, 5], [5, 0, 1]],
+    );
 
     commands.spawn((
         MaterialMeshBundle {
             mesh: triangle.clone(),
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.))
-                .with_translation(Vec3::X * -15. + Vec3::Y * -15.),
+                .with_translation(Vec3::X * 10. + Vec3::Y * 10.),
             material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
             ..default()
         },
@@ -91,7 +174,7 @@ fn setup(
         MaterialMeshBundle {
             mesh: triangle.clone(),
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.5))
-                .with_translation(Vec3::X * 15. + Vec3::Y * -15.),
+                .with_translation(Vec3::X * -10. + Vec3::Y * 10.),
             material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
             ..default()
         },
@@ -103,7 +186,58 @@ fn setup(
         MaterialMeshBundle {
             mesh: triangle.clone(),
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.))
-                .with_translation(Vec3::X * 15. + Vec3::Y * 15.),
+                .with_translation(Vec3::X * -10. + Vec3::Y * -10.),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
+
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle.clone(),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.5))
+                .with_translation(Vec3::X * 10. + Vec3::Y * -10.),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
+
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle.clone(),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.25))
+                .with_translation(Vec3::Y * 40.)
+                .with_scale(Vec3::new(3., 3., 1.5)),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
+
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle.clone(),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.75))
+                .with_translation(Vec3::X * -40.)
+                .with_scale(Vec3::new(3., 3., 1.5)),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
+
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle.clone(),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.25))
+                .with_translation(Vec3::Y * -40.)
+                .with_scale(Vec3::new(3., 3., 1.5)),
             material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
             ..default()
         },
@@ -114,13 +248,14 @@ fn setup(
     commands.spawn((
         MaterialMeshBundle {
             mesh: triangle,
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.5))
-                .with_translation(Vec3::X * -15. + Vec3::Y * 15.),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.75))
+                .with_translation(Vec3::X * 40.)
+                .with_scale(Vec3::new(3., 3., 1.5)),
             material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
             ..default()
         },
         RigidBody::Fixed,
-        collider.clone(),
+        collider,
     ));
 
     // camera
@@ -136,7 +271,6 @@ fn setup(
             ..default()
         },
         BloomSettings::default(),
-        Inertia::default(),
     ));
 }
 
@@ -159,12 +293,6 @@ fn cycle_msaa(input: Res<Input<KeyCode>>, mut msaa: ResMut<Msaa>) {
     if input.just_pressed(KeyCode::Key8) {
         info!("Using 8x MSAA");
         *msaa = Msaa::Sample8;
-    }
-}
-
-fn apply_inertia(mut query: Query<(&mut Transform, &Inertia)>, time: Res<Time>) {
-    for (mut transform, inertia) in query.iter_mut() {
-        transform.translation += inertia.velocity * time.delta_seconds();
     }
 }
 
