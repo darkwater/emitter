@@ -19,17 +19,19 @@ use bevy::{
     },
 };
 use bevy_hanabi::{prelude::*, EffectAsset};
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
 
 use crate::{
     bullet::BulletPlugin, damageable::despawn_if_dead, player::PlayerPlugin,
-    utils::zlock::ZLockPlugin,
+    utils::zlock::ZLockPlugin, weapon::WeaponPlugin,
 };
 
 mod bullet;
 mod collision_groups;
 mod damageable;
 mod player;
+mod weapon;
 mod utils {
     pub mod drawing;
     pub mod look_at_2d;
@@ -50,6 +52,7 @@ fn main() {
         .add_plugin(MaterialPlugin::<LineMaterial>::default())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(HanabiPlugin)
         .add_startup_system(setup)
         .add_startup_system(disable_gravity)
@@ -58,8 +61,9 @@ fn main() {
         .add_system(toggle_debug_render)
         .add_system(despawn_if_dead)
         .add_plugin(PlayerPlugin)
+        .add_plugin(WeaponPlugin)
         .add_plugin(BulletPlugin)
-        .add_plugin(ZLockPlugin)
+        // .add_plugin(ZLockPlugin)
         .run();
 }
 
@@ -133,6 +137,7 @@ fn setup(
 ) {
     let mut window = window.single_mut();
     window.cursor.icon = CursorIcon::Crosshair;
+    window.cursor.visible = false;
 
     // triangle
     let triangle = meshes.add(Mesh::from(LineStrip {
@@ -212,7 +217,7 @@ fn setup(
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.25))
                 .with_translation(Vec3::Y * 40.)
                 .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
             ..default()
         },
         RigidBody::Fixed,
@@ -225,7 +230,7 @@ fn setup(
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.75))
                 .with_translation(Vec3::X * -40.)
                 .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
             ..default()
         },
         RigidBody::Fixed,
@@ -238,7 +243,7 @@ fn setup(
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.25))
                 .with_translation(Vec3::Y * -40.)
                 .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
             ..default()
         },
         RigidBody::Fixed,
@@ -251,7 +256,7 @@ fn setup(
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.75))
                 .with_translation(Vec3::X * 40.)
                 .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
             ..default()
         },
         RigidBody::Fixed,
@@ -260,6 +265,7 @@ fn setup(
 
     // camera
     commands.spawn((
+        Name::new("Camera"),
         Camera3dBundle {
             camera: Camera { hdr: true, ..default() },
             camera_3d: Camera3d {

@@ -7,6 +7,7 @@ use super::{PlayerAimTarget, PlayerShip, ShipEngine};
 use crate::{
     collision_groups,
     utils::{drawing::arc, zlock::ZLocked},
+    weapon::{Weapon, WeaponTrigger},
     LineList, LineMaterial,
 };
 
@@ -26,22 +27,34 @@ pub fn spawn_player(
     lines.append(&mut arc(1., PI * -0.15, PI * -0.65, 8, true));
 
     commands.spawn((
+        Name::new("Player Ship"),
+        PlayerShip,
         MaterialMeshBundle {
             mesh: meshes.add(Mesh::from(LineList { lines })),
             transform: Transform::from_xyz(0., 0., 0.),
             material: materials.add(LineMaterial { color: Color::ORANGE * 5. }),
             ..default()
         },
-        PlayerShip,
         ShipEngine { power: 40., ..Default::default() },
         RigidBody::Dynamic,
         Velocity::default(),
         Collider::ball(1.),
         CollisionGroups::new(collision_groups::PLAYER, collision_groups::ALL),
         ZLocked { angular: true },
+        Weapon {
+            cooldown: 0.2,
+            next_shot: 0.,
+            damage: 1.,
+            velocity: 50.,
+            spread: 0.,
+            range: 1000.,
+            color: Color::RED,
+        },
+        WeaponTrigger::default(),
     ));
 
     commands.spawn((
+        Name::new("Player Aim Target"),
         MaterialMeshBundle {
             mesh: meshes.add(Mesh::from(LineList {
                 lines: vec![

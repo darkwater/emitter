@@ -5,6 +5,7 @@ use super::{PlayerAimTarget, PlayerShip, ShipEngine};
 use crate::{
     bullet::Bullet,
     utils::{look_at_2d::LookAt2d, zlock::ZLocked},
+    weapon::{Weapon, WeaponTrigger},
     LineList, LineMaterial, CAMERA_OFFSET,
 };
 
@@ -67,33 +68,11 @@ pub fn apply_ship_engine(mut query: Query<(&mut Velocity, &ShipEngine)>, time: R
 
 pub fn shoot(
     input: ResMut<Input<MouseButton>>,
-    mut query: Query<(&Transform, &PlayerShip)>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<LineMaterial>>,
+    mut query: Query<(&PlayerShip, &mut WeaponTrigger)>,
 ) {
-    if input.just_pressed(MouseButton::Left) {
-        for (transform, _) in query.iter_mut() {
-            let direction = transform.right();
-
-            commands.spawn((
-                MaterialMeshBundle {
-                    mesh: meshes.add(Mesh::from(LineList {
-                        lines: vec![(Vec3::X * -0.5, Vec3::X * 0.5)],
-                    })),
-                    transform: *transform,
-                    // .with_translation(transform.translation + direction),
-                    material: materials.add(LineMaterial { color: Color::RED * 5. }),
-                    ..default()
-                },
-                RigidBody::Dynamic,
-                Velocity {
-                    linvel: direction * 50.,
-                    angvel: Vec3::ZERO,
-                },
-                ZLocked { angular: true },
-                Bullet { damage: 1. },
-            ));
+    if input.pressed(MouseButton::Left) {
+        for (_, mut trigger) in query.iter_mut() {
+            trigger.0 = true;
         }
     }
 }
