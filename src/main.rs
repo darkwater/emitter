@@ -56,7 +56,6 @@ fn main() {
         .add_plugin(HanabiPlugin)
         .add_startup_system(setup)
         .add_startup_system(disable_gravity)
-        .add_startup_system(setup_particles)
         .add_system(cycle_msaa)
         .add_system(toggle_debug_render)
         .add_system(despawn_if_dead)
@@ -78,57 +77,6 @@ fn toggle_debug_render(
     debug_render.enabled = input.pressed(MouseButton::Right);
 }
 
-fn setup_particles(mut effects: ResMut<Assets<EffectAsset>>, mut commands: Commands) {
-    let mut color_gradient1 = Gradient::new();
-    color_gradient1.add_key(0.0, Vec4::new(100.0, 0.0, 0.0, 1.0));
-    color_gradient1.add_key(0.1, Vec4::new(50.0, 0.0, 0.0, 1.0));
-    color_gradient1.add_key(0.9, Vec4::new(20.0, 0.0, 0.0, 1.0));
-    color_gradient1.add_key(1.0, Vec4::new(2.0, 0.0, 0.0, 0.0));
-
-    let mut size_gradient1 = Gradient::new();
-    size_gradient1.add_key(0.0, Vec2::splat(0.10));
-    size_gradient1.add_key(0.3, Vec2::splat(0.05));
-    size_gradient1.add_key(1.0, Vec2::splat(0.0));
-
-    let effect1 = effects.add(
-        EffectAsset {
-            name: "firework".to_string(),
-            capacity: 32768,
-            spawner: Spawner::once(50.0.into(), false),
-            ..Default::default()
-        }
-        .init(InitPositionSphereModifier {
-            center: Vec3::ZERO,
-            radius: 0.4,
-            dimension: ShapeDimension::Volume,
-        })
-        .init(InitVelocitySphereModifier {
-            center: Vec3::ZERO,
-            // Give a bit of variation by randomizing the initial speed
-            speed: Value::Uniform((1., 5.)),
-        })
-        .init(InitLifetimeModifier {
-            // Give a bit of variation by randomizing the lifetime per particle
-            lifetime: Value::Uniform((0.2, 0.8)),
-        })
-        .init(InitAgeModifier {
-            // Give a bit of variation by randomizing the age per particle. This will control the
-            // starting color and starting size of particles.
-            age: Value::Uniform((0.0, 0.07)),
-        })
-        // .update(LinearDragModifier { drag: 5. })
-        // .update(AccelModifier::constant(Vec3::new(0., -8., 0.)))
-        .render(ColorOverLifetimeModifier { gradient: color_gradient1 })
-        .render(SizeOverLifetimeModifier { gradient: size_gradient1 }),
-    );
-
-    commands.spawn((Name::new("firework"), ParticleEffectBundle {
-        effect: ParticleEffect::new(effect1),
-        transform: Transform::IDENTITY,
-        ..Default::default()
-    }));
-}
-
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -137,7 +85,6 @@ fn setup(
 ) {
     let mut window = window.single_mut();
     window.cursor.icon = CursorIcon::Crosshair;
-    window.cursor.visible = false;
 
     // triangle
     let triangle = meshes.add(Mesh::from(LineStrip {
@@ -274,6 +221,7 @@ fn setup(
             },
             tonemapping: Tonemapping::TonyMcMapface,
             transform: Transform::from_translation(CAMERA_OFFSET).looking_at(Vec3::ZERO, Vec3::Z),
+
             ..default()
         },
         BloomSettings::default(),

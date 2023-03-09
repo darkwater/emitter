@@ -66,7 +66,7 @@ pub fn shoot(
                 })),
                 transform: *transform,
                 // .with_translation(transform.translation + direction),
-                material: materials.add(LineMaterial { color: Color::RED * 5. }),
+                material: materials.add(LineMaterial { color }),
                 ..default()
             },
             RigidBody::Dynamic,

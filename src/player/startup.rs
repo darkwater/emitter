@@ -48,7 +48,7 @@ pub fn spawn_player(
             velocity: 50.,
             spread: 0.,
             range: 1000.,
-            color: Color::RED,
+            color: Color::RED * 5.,
         },
         WeaponTrigger::default(),
     ));
