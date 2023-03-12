@@ -10,6 +10,7 @@ bevy = "0.10.0"
 bevy-inspector-egui = "0.18.0"
 bevy_hanabi = "0.6.0-dev"
 bevy_rapier3d = "0.21.0"
+big-brain = "0.17.0"
 rand = "0.8.5"
 
 [profile.dev]

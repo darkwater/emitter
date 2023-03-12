@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 //! Create a custom material to draw basic lines in 3D
 
 use std::f32::consts::PI;
@@ -17,20 +19,24 @@ use bevy::{
             SpecializedMeshPipelineError,
         },
     },
+    window::{Cursor, PresentMode, WindowMode, WindowResolution},
 };
-use bevy_hanabi::{prelude::*, EffectAsset};
+use bevy_hanabi::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
+use big_brain::BigBrainPlugin;
 
 use crate::{
-    bullet::BulletPlugin, damageable::despawn_if_dead, player::PlayerPlugin,
+    bullet::BulletPlugin, damageable::despawn_if_dead, enemy::EnemyPlugin, player::PlayerPlugin,
     utils::zlock::ZLockPlugin, weapon::WeaponPlugin,
 };
 
 mod bullet;
 mod collision_groups;
 mod damageable;
+mod enemy;
 mod player;
+mod team;
 mod weapon;
 mod utils {
     pub mod drawing;
@@ -45,15 +51,35 @@ fn main() {
 
     App::new()
         .insert_resource(Msaa::Off)
-        .add_plugins(DefaultPlugins.set(LogPlugin {
-            level: bevy::log::Level::INFO,
-            filter: "emitter=trace,wgpu=warn".to_string(),
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(LogPlugin {
+                    level: bevy::log::Level::INFO,
+                    filter: "emitter=trace,wgpu=warn,big_brain=debug".to_string(),
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        cursor: {
+                            let mut cursor = Cursor::default();
+                            cursor.icon = CursorIcon::Crosshair;
+                            cursor
+                        },
+                        present_mode: PresentMode::AutoNoVsync,
+                        mode: WindowMode::Windowed,
+                        resolution: WindowResolution::new(1920., 1080.),
+                        title: "Emitter".to_owned(),
+                        transparent: false,
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         .add_plugin(MaterialPlugin::<LineMaterial>::default())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(HanabiPlugin)
+        .add_plugin(BigBrainPlugin)
         .add_startup_system(setup)
         .add_startup_system(disable_gravity)
         .add_system(cycle_msaa)
@@ -62,7 +88,8 @@ fn main() {
         .add_plugin(PlayerPlugin)
         .add_plugin(WeaponPlugin)
         .add_plugin(BulletPlugin)
-        // .add_plugin(ZLockPlugin)
+        .add_plugin(EnemyPlugin)
+        .add_plugin(ZLockPlugin)
         .run();
 }
 
@@ -81,11 +108,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<LineMaterial>>,
-    mut window: Query<&mut Window>,
 ) {
-    let mut window = window.single_mut();
-    window.cursor.icon = CursorIcon::Crosshair;
-
     // triangle
     let triangle = meshes.add(Mesh::from(LineStrip {
         points: vec![
@@ -113,32 +136,8 @@ fn setup(
     commands.spawn((
         MaterialMeshBundle {
             mesh: triangle.clone(),
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.))
-                .with_translation(Vec3::X * 10. + Vec3::Y * 10.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider.clone(),
-    ));
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle.clone(),
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.5))
-                .with_translation(Vec3::X * -10. + Vec3::Y * 10.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider.clone(),
-    ));
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle.clone(),
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.))
-                .with_translation(Vec3::X * -10. + Vec3::Y * -10.),
+                .with_translation(Vec3::X * 18. + Vec3::Y * 18.),
             material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
             ..default()
         },
@@ -150,7 +149,31 @@ fn setup(
         MaterialMeshBundle {
             mesh: triangle.clone(),
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.5))
-                .with_translation(Vec3::X * 10. + Vec3::Y * -10.),
+                .with_translation(Vec3::X * -18. + Vec3::Y * 18.),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
+
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle.clone(),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.))
+                .with_translation(Vec3::X * -18. + Vec3::Y * -18.),
+            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            ..default()
+        },
+        RigidBody::Fixed,
+        collider.clone(),
+    ));
+
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: triangle.clone(),
+            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.5))
+                .with_translation(Vec3::X * 18. + Vec3::Y * -18.),
             material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
             ..default()
         },
@@ -216,7 +239,7 @@ fn setup(
         Camera3dBundle {
             camera: Camera { hdr: true, ..default() },
             camera_3d: Camera3d {
-                clear_color: ClearColorConfig::Custom(Color::BLACK),
+                clear_color: ClearColorConfig::Custom(Color::rgba(0., 0., 0., 0.)),
                 ..default()
             },
             tonemapping: Tonemapping::TonyMcMapface,

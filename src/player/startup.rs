@@ -6,6 +6,7 @@ use bevy_rapier3d::prelude::*;
 use super::{PlayerAimTarget, PlayerShip, ShipEngine};
 use crate::{
     collision_groups,
+    team::Team,
     utils::{drawing::arc, zlock::ZLocked},
     weapon::{Weapon, WeaponTrigger},
     LineList, LineMaterial,
@@ -47,10 +48,10 @@ pub fn spawn_player(
             damage: 1.,
             velocity: 50.,
             spread: 0.,
-            range: 1000.,
             color: Color::RED * 5.,
         },
         WeaponTrigger::default(),
+        Team::Player,
     ));
 
     commands.spawn((

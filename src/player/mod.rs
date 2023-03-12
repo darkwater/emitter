@@ -9,7 +9,8 @@ pub struct PlayerShip;
 #[derive(Component)]
 pub struct PlayerAimTarget;
 
-#[derive(Component, Default)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
 pub struct ShipEngine {
     pub target_velocity: Vec3,
     pub power: f32,
@@ -25,6 +26,7 @@ impl Plugin for PlayerPlugin {
             .add_system(systems::follow_player_ship)
             .add_system(systems::shoot)
             .add_system(systems::move_aim_target)
-            .add_system(systems::aim_player_ship);
+            .add_system(systems::aim_player_ship)
+            .register_type::<ShipEngine>();
     }
 }

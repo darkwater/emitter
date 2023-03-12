@@ -2,18 +2,20 @@ use bevy::prelude::*;
 use bevy_hanabi::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-use crate::{collision_groups, damageable::Damageable};
+use crate::{collision_groups, damageable::Damageable, team::Team};
 
 pub struct BulletPlugin;
 
 impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(setup_particle_effect)
-            .add_system(collide_bullets);
+            .add_system(collide_bullets)
+            .register_type::<Bullet>();
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
 pub struct Bullet {
     pub damage: f32,
 }
@@ -77,8 +79,10 @@ fn setup_particle_effect(mut effects: ResMut<Assets<EffectAsset>>, mut commands:
 }
 
 fn collide_bullets(
-    query: Query<(Entity, &Bullet, &Transform, &Velocity), With<Bullet>>,
-    mut targets: Query<&mut Damageable, Without<Bullet>>,
+    query: Query<(Entity, &Bullet, &Transform, &Velocity, Option<&Team>)>,
+    team_targets: Query<&Team>,
+    mut damage_targets: Query<&mut Damageable>,
+    mut velocity_targets: Query<(&GlobalTransform, &mut ExternalImpulse)>,
     context: Res<RapierContext>,
     mut commands: Commands,
     mut impact_effect: Query<
@@ -86,7 +90,7 @@ fn collide_bullets(
         (With<BulletImpactEffect>, Without<Bullet>),
     >,
 ) {
-    for (bullet_entity, bullet, transform, velocity) in query.iter() {
+    for (bullet_entity, bullet, transform, velocity, bullet_team) in query.iter() {
         let dir = velocity.linvel.normalize_or_zero();
 
         let Some((target_entity, intersection)) = context.cast_ray_and_get_normal(
@@ -97,13 +101,19 @@ fn collide_bullets(
             QueryFilter::default().groups(CollisionGroups {
                 memberships: collision_groups::BULLET,
                 filters: collision_groups::ALL
-                    & !collision_groups::BULLET
-                    & !collision_groups::PLAYER,
+                    & !collision_groups::BULLET,
             }),
         ) else { continue };
 
         debug!("bullet hit entity: {:?}", bullet_entity);
         debug!("bullet hit intersection: {:?}", intersection);
+
+        if let (Some(bullet_team), Ok(target_team)) = (bullet_team, team_targets.get(target_entity))
+        {
+            if !bullet_team.can_damage(target_team) {
+                continue;
+            }
+        }
 
         let (mut effect, mut effect_transform) = impact_effect.single_mut();
         effect_transform.translation = intersection.point;
@@ -112,12 +122,20 @@ fn collide_bullets(
 
         commands.entity(bullet_entity).despawn();
 
-        if let Ok(mut damageable) = targets.get_mut(target_entity) {
+        if let Ok(mut damageable) = damage_targets.get_mut(target_entity) {
             debug!("bullet hit target: {:?}", target_entity);
             debug!("bullet hit target health: {:?}", damageable.health);
             damageable.health -= bullet.damage;
 
             debug!("bullet hit target health: {:?}", damageable.health);
+        }
+
+        if let Ok((transform, mut impulse)) = velocity_targets.get_mut(target_entity) {
+            *impulse += ExternalImpulse::at_point(
+                intersection.normal * -2.,
+                intersection.point,
+                transform.translation(),
+            );
         }
     }
 }

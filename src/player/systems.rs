@@ -2,12 +2,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use super::{PlayerAimTarget, PlayerShip, ShipEngine};
-use crate::{
-    bullet::Bullet,
-    utils::{look_at_2d::LookAt2d, zlock::ZLocked},
-    weapon::{Weapon, WeaponTrigger},
-    LineList, LineMaterial, CAMERA_OFFSET,
-};
+use crate::{utils::look_at_2d::LookAt2d, weapon::WeaponTrigger, CAMERA_OFFSET};
 
 pub fn move_player_ship(
     input: Res<Input<KeyCode>>,
