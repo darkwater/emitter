@@ -2,39 +2,38 @@
 
 //! Create a custom material to draw basic lines in 3D
 
-use std::f32::consts::PI;
-
 use bevy::{
     core_pipeline::{
         bloom::BloomSettings, clear_color::ClearColorConfig, tonemapping::Tonemapping,
     },
     log::LogPlugin,
-    pbr::{MaterialPipeline, MaterialPipelineKey},
     prelude::*,
-    reflect::TypeUuid,
-    render::{
-        mesh::{MeshVertexBufferLayout, PrimitiveTopology},
-        render_resource::{
-            AsBindGroup, PolygonMode, RenderPipelineDescriptor, ShaderRef,
-            SpecializedMeshPipelineError,
-        },
-    },
-    window::{Cursor, PresentMode, WindowMode, WindowResolution},
+    window::{Cursor, PresentMode, WindowFocused, WindowMode, WindowResolution},
 };
 use bevy_hanabi::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
 use big_brain::BigBrainPlugin;
+use editor::EditorWindow;
+use leafwing_input_manager::prelude::{InputManagerPlugin, ToggleActions};
 
 use crate::{
-    bullet::BulletPlugin, damageable::despawn_if_dead, enemy::EnemyPlugin, player::PlayerPlugin,
-    utils::zlock::ZLockPlugin, weapon::WeaponPlugin,
+    bullet::BulletPlugin,
+    damageable::despawn_if_dead,
+    editor::EditorPlugin,
+    enemy::EnemyPlugin,
+    line_material::LineMaterial,
+    player::{input::PlayerAction, systems::PlayerFollower, PlayerPlugin},
+    utils::zlock::ZLockPlugin,
+    weapon::WeaponPlugin,
 };
 
 mod bullet;
 mod collision_groups;
 mod damageable;
+mod editor;
 mod enemy;
+mod line_material;
+mod map;
 mod player;
 mod team;
 mod weapon;
@@ -47,8 +46,6 @@ mod utils {
 const CAMERA_OFFSET: Vec3 = Vec3::new(0., -5., 50.);
 
 fn main() {
-    println!("{}", std::env::current_dir().unwrap().display());
-
     App::new()
         .insert_resource(Msaa::Off)
         .add_plugins(
@@ -67,6 +64,7 @@ fn main() {
                         present_mode: PresentMode::AutoNoVsync,
                         mode: WindowMode::Windowed,
                         resolution: WindowResolution::new(1920., 1080.),
+                        position: WindowPosition::Centered(MonitorSelection::Primary),
                         title: "Emitter".to_owned(),
                         transparent: false,
                         ..default()
@@ -77,19 +75,24 @@ fn main() {
         .add_plugin(MaterialPlugin::<LineMaterial>::default())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
-        .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(HanabiPlugin)
         .add_plugin(BigBrainPlugin)
-        .add_startup_system(setup)
+        .add_plugin(InputManagerPlugin::<PlayerAction>::default())
+        .add_plugin(bevy_egui::EguiPlugin)
+        .insert_resource(ToggleActions::<PlayerAction>::ENABLED)
+        .add_startup_system(setup_windows_cameras)
         .add_startup_system(disable_gravity)
+        .add_startup_system(map::spawn_map)
         .add_system(cycle_msaa)
         .add_system(toggle_debug_render)
         .add_system(despawn_if_dead)
+        .add_system(handle_window_focus_events)
         .add_plugin(PlayerPlugin)
         .add_plugin(WeaponPlugin)
         .add_plugin(BulletPlugin)
         .add_plugin(EnemyPlugin)
         .add_plugin(ZLockPlugin)
+        .add_plugin(EditorPlugin)
         .run();
 }
 
@@ -104,136 +107,10 @@ fn toggle_debug_render(
     debug_render.enabled = input.pressed(MouseButton::Right);
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<LineMaterial>>,
-) {
-    // triangle
-    let triangle = meshes.add(Mesh::from(LineStrip {
-        points: vec![
-            Vec3::ZERO,
-            Vec3::X * 10.,
-            Vec3::Z * 5.,
-            Vec3::Y * 10.,
-            Vec3::ZERO,
-            Vec3::Z * 5.,
-        ],
-    }));
+fn setup_windows_cameras(mut commands: Commands, mut windows: Query<Entity, With<Window>>) {
+    let window = windows.single_mut();
+    commands.entity(window).insert(PlayerWindow);
 
-    let collider = Collider::trimesh(
-        vec![
-            Vec3::Z,
-            -Vec3::Z,
-            Vec3::X * 10. + Vec3::Z,
-            Vec3::X * 10. + -Vec3::Z,
-            Vec3::Y * 10. + Vec3::Z,
-            Vec3::Y * 10. + -Vec3::Z,
-        ],
-        vec![[0, 2, 1], [1, 2, 3], [4, 0, 5], [5, 0, 1]],
-    );
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle.clone(),
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.))
-                .with_translation(Vec3::X * 18. + Vec3::Y * 18.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider.clone(),
-    ));
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle.clone(),
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.5))
-                .with_translation(Vec3::X * -18. + Vec3::Y * 18.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider.clone(),
-    ));
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle.clone(),
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.))
-                .with_translation(Vec3::X * -18. + Vec3::Y * -18.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider.clone(),
-    ));
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle.clone(),
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.5))
-                .with_translation(Vec3::X * 18. + Vec3::Y * -18.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider.clone(),
-    ));
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle.clone(),
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.25))
-                .with_translation(Vec3::Y * 40.)
-                .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider.clone(),
-    ));
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle.clone(),
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.75))
-                .with_translation(Vec3::X * -40.)
-                .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider.clone(),
-    ));
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle.clone(),
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.25))
-                .with_translation(Vec3::Y * -40.)
-                .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider.clone(),
-    ));
-
-    commands.spawn((
-        MaterialMeshBundle {
-            mesh: triangle,
-            transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.75))
-                .with_translation(Vec3::X * 40.)
-                .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
-            ..default()
-        },
-        RigidBody::Fixed,
-        collider,
-    ));
-
-    // camera
     commands.spawn((
         Name::new("Camera"),
         Camera3dBundle {
@@ -244,10 +121,10 @@ fn setup(
             },
             tonemapping: Tonemapping::TonyMcMapface,
             transform: Transform::from_translation(CAMERA_OFFSET).looking_at(Vec3::ZERO, Vec3::Z),
-
             ..default()
         },
         BloomSettings::default(),
+        PlayerFollower,
     ));
 }
 
@@ -273,61 +150,34 @@ fn cycle_msaa(input: Res<Input<KeyCode>>, mut msaa: ResMut<Msaa>) {
     }
 }
 
-#[derive(Default, AsBindGroup, TypeUuid, Debug, Clone)]
-#[uuid = "050ce6ac-080a-4d8c-b6b5-b5bab7560d8f"]
-pub struct LineMaterial {
-    #[uniform(0)]
-    color: Color,
-}
+#[derive(Component)]
+pub struct PlayerWindow;
 
-impl Material for LineMaterial {
-    fn fragment_shader() -> ShaderRef {
-        "shaders/line_material.wgsl".into()
-    }
+#[derive(Component)]
+pub struct FocusedWindow;
 
-    fn specialize(
-        _pipeline: &MaterialPipeline<Self>,
-        descriptor: &mut RenderPipelineDescriptor,
-        _layout: &MeshVertexBufferLayout,
-        _key: MaterialPipelineKey<Self>,
-    ) -> Result<(), SpecializedMeshPipelineError> {
-        // This is the important part to tell bevy to render this material as a line between vertices
-        descriptor.primitive.polygon_mode = PolygonMode::Line;
-        Ok(())
-    }
-}
+fn handle_window_focus_events(
+    mut commands: Commands,
+    mut events: EventReader<WindowFocused>,
+    windows: Query<AnyOf<(&PlayerWindow, &EditorWindow)>, With<Window>>,
+    mut player_input: ResMut<ToggleActions<PlayerAction>>,
+    // editor_input: ResMut<InputManagerPlugin<EditorAction>>,
+) {
+    for event in events.iter() {
+        if event.focused {
+            commands.entity(event.window).insert(FocusedWindow);
+        } else {
+            commands.entity(event.window).remove::<FocusedWindow>();
+        }
 
-/// A list of lines with a start and end position
-#[derive(Debug, Clone)]
-pub struct LineList {
-    pub lines: Vec<(Vec3, Vec3)>,
-}
+        let (player, editor) = windows.get(event.window).unwrap();
 
-impl From<LineList> for Mesh {
-    fn from(line: LineList) -> Self {
-        // This tells wgpu that the positions are list of lines
-        // where every pair is a start and end point
-        let mut mesh = Mesh::new(PrimitiveTopology::LineList);
+        if player.is_some() {
+            player_input.enabled = event.focused;
+        }
 
-        let vertices: Vec<_> = line.lines.into_iter().flat_map(|(a, b)| [a, b]).collect();
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-        mesh
-    }
-}
-
-/// A list of points that will have a line drawn between each consecutive points
-#[derive(Debug, Clone)]
-pub struct LineStrip {
-    pub points: Vec<Vec3>,
-}
-
-impl From<LineStrip> for Mesh {
-    fn from(line: LineStrip) -> Self {
-        // This tells wgpu that the positions are a list of points
-        // where a line will be drawn between each consecutive point
-        let mut mesh = Mesh::new(PrimitiveTopology::LineStrip);
-
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, line.points);
-        mesh
+        if editor.is_some() {
+            // editor_input.enabled = event.focused;
+        }
     }
 }

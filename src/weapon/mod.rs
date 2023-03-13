@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::{RigidBody, Velocity};
 
-use crate::{bullet::Bullet, team::Team, utils::zlock::ZLocked, LineList, LineMaterial};
+use crate::{
+    bullet::Bullet, line_material::LineList, team::Team, utils::zlock::ZLocked, LineMaterial,
+};
 
 pub struct WeaponPlugin;
 

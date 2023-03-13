@@ -9,9 +9,10 @@ use super::{
 use crate::{
     collision_groups,
     damageable::Damageable,
+    line_material::LineList,
     team::Team,
     utils::{drawing::circle, zlock::ZLocked},
-    LineList, LineMaterial,
+    LineMaterial,
 };
 
 #[derive(Component)]

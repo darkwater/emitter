@@ -2,14 +2,16 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
+use leafwing_input_manager::prelude::*;
 
-use super::{PlayerAimTarget, PlayerShip, ShipEngine};
+use super::{input::PlayerAction, PlayerAimTarget, PlayerShip, ShipEngine};
 use crate::{
     collision_groups,
+    line_material::LineList,
     team::Team,
     utils::{drawing::arc, zlock::ZLocked},
     weapon::{Weapon, WeaponTrigger},
-    LineList, LineMaterial,
+    LineMaterial,
 };
 
 pub fn spawn_player(
@@ -52,6 +54,24 @@ pub fn spawn_player(
         },
         WeaponTrigger::default(),
         Team::Player,
+        InputManagerBundle::<PlayerAction> {
+            action_state: ActionState::default(),
+            input_map: InputMap::default()
+                .insert(DualAxis::left_stick(), PlayerAction::Move)
+                .insert(DualAxis::right_stick(), PlayerAction::Aim)
+                .insert(DualAxis::right_stick(), PlayerAction::Shoot)
+                .insert(MouseButton::Left, PlayerAction::Shoot)
+                .insert(
+                    VirtualDPad {
+                        up: KeyCode::W.into(),
+                        down: KeyCode::S.into(),
+                        left: KeyCode::A.into(),
+                        right: KeyCode::D.into(),
+                    },
+                    PlayerAction::Move,
+                )
+                .build(),
+        },
     ));
 
     commands.spawn((

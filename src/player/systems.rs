@@ -1,46 +1,30 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
+use leafwing_input_manager::prelude::*;
 
-use super::{PlayerAimTarget, PlayerShip, ShipEngine};
-use crate::{utils::look_at_2d::LookAt2d, weapon::WeaponTrigger, CAMERA_OFFSET};
+use super::{input::PlayerAction, PlayerAimTarget, PlayerShip, ShipEngine};
+use crate::{utils::look_at_2d::LookAt2d, weapon::WeaponTrigger, PlayerWindow, CAMERA_OFFSET};
 
 pub fn move_player_ship(
-    input: Res<Input<KeyCode>>,
-    mut query: Query<&mut ShipEngine, With<PlayerShip>>,
+    mut query: Query<(&mut ShipEngine, &ActionState<PlayerAction>), With<PlayerShip>>,
 ) {
-    let mut x_dir = 0.;
-    let mut y_dir = 0.;
-
-    if input.pressed(KeyCode::W) {
-        y_dir += 1.;
-    }
-
-    if input.pressed(KeyCode::S) {
-        y_dir -= 1.;
-    }
-
-    if input.pressed(KeyCode::A) {
-        x_dir -= 1.;
-    }
-
-    if input.pressed(KeyCode::D) {
-        x_dir += 1.;
-    }
-
-    let mut vec = Vec3::new(x_dir, y_dir, 0.);
-
-    if vec.length() > 0. {
-        vec = vec.normalize();
-    }
-
-    for mut engine in query.iter_mut() {
-        engine.target_velocity = vec * 25.;
+    for (mut engine, action_state) in query.iter_mut() {
+        if action_state.pressed(PlayerAction::Move) {
+            let axis_pair = action_state.clamped_axis_pair(PlayerAction::Move).unwrap();
+            let vec = axis_pair.xy().clamp_length_max(1.);
+            engine.target_velocity = (vec * 25.).extend(0.);
+        } else {
+            engine.target_velocity = Vec3::splat(0.);
+        }
     }
 }
 
+#[derive(Component)]
+pub struct PlayerFollower;
+
 pub fn follow_player_ship(
     mut query: Query<(&Transform, &PlayerShip), Without<Camera3d>>,
-    mut camera: Query<(&mut Transform, &Camera3d)>,
+    mut camera: Query<(&mut Transform, &Camera3d), With<PlayerFollower>>,
 ) {
     for (transform, _) in query.iter_mut() {
         for (mut camera_transform, _) in camera.iter_mut() {
@@ -61,23 +45,20 @@ pub fn apply_ship_engine(mut query: Query<(&mut Velocity, &ShipEngine)>, time: R
     }
 }
 
-pub fn shoot(
-    input: ResMut<Input<MouseButton>>,
-    mut query: Query<(&PlayerShip, &mut WeaponTrigger)>,
-) {
-    if input.pressed(MouseButton::Left) {
-        for (_, mut trigger) in query.iter_mut() {
+pub fn shoot(mut query: Query<(&PlayerShip, &ActionState<PlayerAction>, &mut WeaponTrigger)>) {
+    for (_, action_state, mut trigger) in query.iter_mut() {
+        if action_state.pressed(PlayerAction::Shoot) {
             trigger.0 = true;
         }
     }
 }
 
 pub fn move_aim_target(
-    window: Query<&Window>,
-    camera: Query<(&Camera, &GlobalTransform)>,
+    window: Query<&Window, With<PlayerWindow>>,
+    camera: Query<(&Camera, &GlobalTransform), With<PlayerFollower>>,
     mut player_aim_target: Query<&mut Transform, With<PlayerAimTarget>>,
 ) {
-    let window = window.single();
+    let Ok(window) = window.get_single() else { return };
     let (camera, camera_transform) = camera.single();
     let mut player_aim_target = player_aim_target.single_mut();
 

@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
-mod startup;
-mod systems;
+pub mod input;
+pub mod startup;
+pub mod systems;
 
 #[derive(Component)]
 pub struct PlayerShip;
