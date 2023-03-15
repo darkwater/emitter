@@ -37,7 +37,7 @@ fn setup_particle_effect(mut effects: ResMut<Assets<EffectAsset>>, mut commands:
 
     let effect1 = effects.add(
         EffectAsset {
-            name: "Bullet impact".to_string(),
+            name: "Bullet Impact".to_string(),
             capacity: 32768,
             spawner: Spawner::once(50.0.into(), false),
             ..Default::default()
@@ -68,7 +68,7 @@ fn setup_particle_effect(mut effects: ResMut<Assets<EffectAsset>>, mut commands:
     );
 
     commands.spawn((
-        Name::new("Bullet impact effect"),
+        Name::new("Bullet Impact Effect"),
         ParticleEffectBundle {
             effect: ParticleEffect::new(effect1),
             transform: Transform::IDENTITY,

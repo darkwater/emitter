@@ -13,7 +13,7 @@ use bevy::{
 use bevy_hanabi::prelude::*;
 use bevy_rapier3d::prelude::*;
 use big_brain::BigBrainPlugin;
-use editor::EditorWindow;
+use editor::{input::EditorAction, EditorWindow};
 use leafwing_input_manager::prelude::{InputManagerPlugin, ToggleActions};
 
 use crate::{
@@ -78,8 +78,10 @@ fn main() {
         .add_plugin(HanabiPlugin)
         .add_plugin(BigBrainPlugin)
         .add_plugin(InputManagerPlugin::<PlayerAction>::default())
+        .add_plugin(InputManagerPlugin::<EditorAction>::default())
         .add_plugin(bevy_egui::EguiPlugin)
-        .insert_resource(ToggleActions::<PlayerAction>::ENABLED)
+        .insert_resource(ToggleActions::<PlayerAction>::DISABLED)
+        .insert_resource(ToggleActions::<EditorAction>::DISABLED)
         .add_startup_system(setup_windows_cameras)
         .add_startup_system(disable_gravity)
         .add_startup_system(map::spawn_map)
@@ -161,7 +163,7 @@ fn handle_window_focus_events(
     mut events: EventReader<WindowFocused>,
     windows: Query<AnyOf<(&PlayerWindow, &EditorWindow)>, With<Window>>,
     mut player_input: ResMut<ToggleActions<PlayerAction>>,
-    // editor_input: ResMut<InputManagerPlugin<EditorAction>>,
+    mut editor_input: ResMut<ToggleActions<EditorAction>>,
 ) {
     for event in events.iter() {
         if event.focused {
@@ -177,7 +179,7 @@ fn handle_window_focus_events(
         }
 
         if editor.is_some() {
-            // editor_input.enabled = event.focused;
+            editor_input.enabled = event.focused;
         }
     }
 }

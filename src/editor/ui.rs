@@ -17,6 +17,7 @@ use bevy_inspector_egui::{
 };
 use egui_dock::{NodeIndex, Tree};
 use egui_gizmo::GizmoMode;
+use heck::ToTitleCase;
 
 use super::{EditorCamera, EditorWindow};
 
@@ -24,18 +25,17 @@ pub struct EditorUiPlugin;
 
 impl Plugin for EditorUiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(set_gizmo_mode)
-            .add_system(
-                show_ui_system
-                    .in_base_set(CoreSet::PostUpdate)
-                    .before(EguiSet::ProcessOutput)
-                    .before(bevy::transform::TransformSystem::TransformPropagate),
-            )
-            .add_system(
-                set_camera_viewport
-                    .in_base_set(CoreSet::PostUpdate)
-                    .after(show_ui_system),
-            );
+        app.add_system(
+            show_ui_system
+                .in_base_set(CoreSet::PostUpdate)
+                .before(EguiSet::ProcessOutput)
+                .before(bevy::transform::TransformSystem::TransformPropagate),
+        )
+        .add_system(
+            set_camera_viewport
+                .in_base_set(CoreSet::PostUpdate)
+                .after(show_ui_system),
+        );
     }
 }
 
@@ -46,6 +46,7 @@ enum EguiWindow {
     Resources,
     Assets,
     Inspector,
+    MapTools,
 }
 
 #[derive(Eq, PartialEq)]
@@ -60,7 +61,7 @@ struct TabViewer<'a> {
     selected_entities: &'a mut SelectedEntities,
     selection: &'a mut InspectorSelection,
     viewport_rect: &'a mut egui::Rect,
-    gizmo_mode: GizmoMode,
+    gizmo_mode: &'a mut GizmoMode,
 }
 
 fn show_ui_system(world: &mut World) {
@@ -110,7 +111,8 @@ impl UiState {
         let mut tree = Tree::new(vec![EguiWindow::GameView]);
         let [game, _inspector] =
             tree.split_right(NodeIndex::root(), 0.75, vec![EguiWindow::Inspector]);
-        let [game, _hierarchy] = tree.split_left(game, 0.2, vec![EguiWindow::Hierarchy]);
+        let [game, _hierarchy] =
+            tree.split_left(game, 0.2, vec![EguiWindow::MapTools, EguiWindow::Hierarchy]);
         let [_game, _bottom] =
             tree.split_below(game, 0.8, vec![EguiWindow::Resources, EguiWindow::Assets]);
 
@@ -129,9 +131,15 @@ impl UiState {
             viewport_rect: &mut self.viewport_rect,
             selected_entities: &mut self.selected_entities,
             selection: &mut self.selection,
-            gizmo_mode: self.gizmo_mode,
+            gizmo_mode: &mut self.gizmo_mode,
         };
         egui_dock::DockArea::new(&mut self.tree).show(ctx, &mut tab_viewer);
+    }
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -147,7 +155,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 (*self.viewport_rect, _) =
                     ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
 
-                draw_gizmo(ui, self.world, self.selected_entities, self.gizmo_mode);
+                draw_gizmo(ui, self.world, self.selected_entities, *self.gizmo_mode);
             }
             EguiWindow::Hierarchy => {
                 let selected = hierarchy_ui(self.world, ui, self.selected_entities);
@@ -183,11 +191,20 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                     );
                 }
             },
+            EguiWindow::MapTools => {
+                egui::ComboBox::from_id_source("gizmo_mode")
+                    .selected_text(format!("{:?}", self.gizmo_mode))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(self.gizmo_mode, GizmoMode::Translate, "Translate");
+                        ui.selectable_value(self.gizmo_mode, GizmoMode::Rotate, "Rotate");
+                        ui.selectable_value(self.gizmo_mode, GizmoMode::Scale, "Scale");
+                    });
+            }
         }
     }
 
     fn title(&mut self, window: &mut Self::Tab) -> egui::WidgetText {
-        format!("{window:?}").into()
+        format!("{window:?}").to_title_case().into()
     }
 
     fn clear_background(&self, window: &Self::Tab) -> bool {
@@ -269,9 +286,9 @@ fn draw_gizmo(
     let view_matrix = Mat4::from(cam_transform.affine().inverse());
     let projection_matrix = projection.get_projection_matrix();
 
-    if selected_entities.len() != 1 {
-        return;
-    }
+    // if selected_entities.len() != 1 {
+    //     return;
+    // }
 
     for selected in selected_entities.iter() {
         let Some(transform) = world.get::<Transform>(selected) else { continue };
@@ -281,7 +298,7 @@ fn draw_gizmo(
                     .model_matrix(model_matrix.to_cols_array_2d())
                     .view_matrix(view_matrix.to_cols_array_2d())
                     .projection_matrix(projection_matrix.to_cols_array_2d())
-                    .orientation(egui_gizmo::GizmoOrientation::Local)
+                    .orientation(egui_gizmo::GizmoOrientation::Global)
                     .mode(gizmo_mode)
                     .interact(ui)
                 else { continue };
@@ -295,14 +312,14 @@ fn draw_gizmo(
     }
 }
 
-fn set_gizmo_mode(input: Res<Input<KeyCode>>, mut ui_state: ResMut<UiState>) {
-    for (key, mode) in [
-        (KeyCode::R, GizmoMode::Rotate),
-        (KeyCode::T, GizmoMode::Translate),
-        (KeyCode::S, GizmoMode::Scale),
-    ] {
-        if input.just_pressed(key) {
-            ui_state.gizmo_mode = mode;
-        }
-    }
-}
+// fn set_gizmo_mode(input: Res<Input<KeyCode>>, mut ui_state: ResMut<UiState>) {
+//     for (key, mode) in [
+//         (KeyCode::R, GizmoMode::Rotate),
+//         (KeyCode::T, GizmoMode::Translate),
+//         (KeyCode::S, GizmoMode::Scale),
+//     ] {
+//         if input.just_pressed(key) {
+//             ui_state.gizmo_mode = mode;
+//         }
+//     }
+// }
