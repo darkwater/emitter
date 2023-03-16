@@ -1,7 +1,5 @@
 #![allow(clippy::type_complexity)]
 
-//! Create a custom material to draw basic lines in 3D
-
 use bevy::{
     core_pipeline::{
         bloom::BloomSettings, clear_color::ClearColorConfig, tonemapping::Tonemapping,
@@ -86,7 +84,6 @@ fn main() {
         .add_startup_system(disable_gravity)
         .add_startup_system(map::spawn_map)
         .add_system(cycle_msaa)
-        .add_system(toggle_debug_render)
         .add_system(despawn_if_dead)
         .add_system(handle_window_focus_events)
         .add_plugin(PlayerPlugin)
@@ -100,13 +97,6 @@ fn main() {
 
 fn disable_gravity(mut conf: ResMut<RapierConfiguration>) {
     conf.gravity = Vec3::ZERO;
-}
-
-fn toggle_debug_render(
-    mut debug_render: ResMut<DebugRenderContext>,
-    input: Res<Input<MouseButton>>,
-) {
-    debug_render.enabled = input.pressed(MouseButton::Right);
 }
 
 fn setup_windows_cameras(mut commands: Commands, mut windows: Query<Entity, With<Window>>) {

@@ -101,7 +101,7 @@ fn set_camera_viewport(
 pub struct UiState {
     tree: Tree<EguiWindow>,
     viewport_rect: egui::Rect,
-    selected_entities: SelectedEntities,
+    pub selected_entities: SelectedEntities,
     selection: InspectorSelection,
     gizmo_mode: GizmoMode,
 }

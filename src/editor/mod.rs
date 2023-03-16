@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use bevy::{
     core_pipeline::{
         bloom::BloomSettings, clear_color::ClearColorConfig, tonemapping::Tonemapping,
@@ -11,9 +9,11 @@ use bevy::{
     window::{CursorGrabMode, PresentMode, WindowMode, WindowRef, WindowResolution},
 };
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
+use bevy_rapier3d::prelude::*;
 use leafwing_input_manager::{prelude::*, InputManagerBundle};
 
 use self::input::EditorAction;
+use crate::player::PlayerAimTarget;
 
 pub mod input;
 pub mod ui;
@@ -25,11 +25,12 @@ impl Plugin for EditorPlugin {
         app.add_plugin(DefaultInspectorConfigPlugin)
             .add_plugin(ui::EditorUiPlugin)
             .init_resource::<ui::UiState>()
-            // .init_resource::<EditorCameraOffset>()
             .add_startup_system(spawn_window)
             .add_system(camera_follow_focus)
             .add_system(move_camera_focus)
-            .add_system(grab_cursor_on_move);
+            .add_system(grab_cursor_on_move)
+            .add_system(toggle_debug_render)
+            .add_system(click_to_select);
     }
 }
 
@@ -73,7 +74,7 @@ pub fn spawn_window(mut commands: Commands) {
                 ..default()
             },
             tonemapping: Tonemapping::TonyMcMapface,
-            transform: Transform::from_xyz(0., 0.1, 75.).looking_at(Vec3::ZERO, Vec3::Z),
+            transform: Transform::from_xyz(0., 1., 75.).looking_at(Vec3::ZERO, Vec3::Z),
             ..default()
         },
         BloomSettings::default(),
@@ -82,11 +83,13 @@ pub fn spawn_window(mut commands: Commands) {
 
     commands.spawn((
         Name::new("Editor Camera Focus"),
-        Transform::from_xyz(0., 0., 0.).with_rotation(Quat::from_rotation_z(PI)),
+        // Transform::from_xyz(0., 0., 0.).with_rotation(Quat::from_rotation_z(0.)),
+        Transform::default(),
         EditorCameraFocus { distance: 75. },
         InputManagerBundle::<EditorAction> {
             action_state: ActionState::default(),
             input_map: InputMap::default()
+                .insert(MouseButton::Left, EditorAction::Select)
                 .insert(MouseButton::Right, EditorAction::Rotate)
                 .insert(SingleAxis::mouse_wheel_y(), EditorAction::Zoom)
                 .insert(
@@ -105,7 +108,6 @@ pub fn spawn_window(mut commands: Commands) {
 
 fn camera_follow_focus(
     focus: Query<(&Transform, &EditorCameraFocus), Without<EditorCamera>>,
-    // offset: Res<EditorCameraOffset>,
     mut camera: Query<&mut Transform, With<EditorCamera>>,
 ) {
     let (focus_transform, focus) = focus.single();
@@ -113,8 +115,6 @@ fn camera_follow_focus(
     for mut camera_transform in camera.iter_mut() {
         *camera_transform =
             focus_transform.mul_transform(Transform::from_xyz(0., 0., focus.distance));
-
-        // camera_transform.look_at(focus_transform.translation, Vec3::Z);
     }
 }
 
@@ -182,4 +182,58 @@ fn grab_cursor_on_move(
                 .map(|v| DVec2::new(v.x as f64, v.y as f64 * -1. + window_height)),
         );
     }
+}
+
+fn toggle_debug_render(
+    mut debug_render: ResMut<DebugRenderContext>,
+    input: Query<&ActionState<EditorAction>>,
+) {
+    debug_render.enabled = input.single().pressed(EditorAction::Select);
+}
+
+fn click_to_select(
+    input: Query<&ActionState<EditorAction>>,
+    window: Query<&Window, With<EditorWindow>>,
+    camera: Query<(&Camera, &GlobalTransform), With<EditorCamera>>,
+    context: Res<RapierContext>,
+    mut ui_state: ResMut<ui::UiState>,
+) {
+    if !input.single().just_released(EditorAction::Select) {
+        return;
+    }
+
+    let Ok(window) = window.get_single() else { return };
+    let (camera, camera_transform) = camera.single();
+
+    let Some(cursor_position) = window.cursor_position() else {
+        return;
+    };
+
+    let viewport = camera.viewport.as_ref().unwrap();
+
+    let Some(ray) = camera.viewport_to_world(
+        camera_transform,
+        cursor_position - Vec2::new(
+            viewport.physical_position.x as f32,
+            (
+                window.physical_height() -
+                (viewport.physical_position.y + viewport.physical_size.y)
+            ) as f32,
+        ),
+    ) else {
+        return;
+    };
+
+    let Some((entity, _toi)) = context.cast_ray(
+        ray.origin,
+        ray.direction,
+        1000.,
+        true,
+        QueryFilter::new(),
+    ) else {
+        ui_state.selected_entities.clear();
+        return;
+    };
+
+    ui_state.selected_entities.select_replace(entity);
 }

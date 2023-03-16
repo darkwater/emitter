@@ -5,4 +5,5 @@ pub enum EditorAction {
     Move,
     Rotate,
     Zoom,
+    Select,
 }
