@@ -88,6 +88,7 @@ pub fn spawn_window(mut commands: Commands) {
             action_state: ActionState::default(),
             input_map: InputMap::default()
                 .insert(MouseButton::Right, EditorAction::Rotate)
+                .insert(SingleAxis::mouse_wheel_y(), EditorAction::Zoom)
                 .insert(
                     VirtualDPad {
                         up: KeyCode::W.into(),
@@ -118,12 +119,11 @@ fn camera_follow_focus(
 }
 
 fn move_camera_focus(
-    mut query: Query<(&mut Transform, &ActionState<EditorAction>), With<EditorCameraFocus>>,
-    // mut offset: ResMut<EditorCameraOffset>,
+    mut query: Query<(&mut Transform, &ActionState<EditorAction>, &mut EditorCameraFocus)>,
     mut mouse_events: EventReader<MouseMotion>,
     time: Res<Time>,
 ) {
-    for (mut transform, action_state) in query.iter_mut() {
+    for (mut transform, action_state, mut focus) in query.iter_mut() {
         let up = transform.up();
         let right = transform.right();
 
@@ -143,6 +143,15 @@ fn move_camera_focus(
 
                 transform.rotate(Quat::from_rotation_z(vec.x * time.delta_seconds() * -0.5));
                 transform.rotate(Quat::from_axis_angle(right, vec.y * time.delta_seconds() * -0.5));
+            }
+        }
+
+        if action_state.just_pressed(EditorAction::Zoom) {
+            let axis = action_state.value(EditorAction::Zoom);
+            focus.distance -= axis * time.delta_seconds() * 2000.;
+
+            if focus.distance < 1. {
+                focus.distance = 1.;
             }
         }
     }

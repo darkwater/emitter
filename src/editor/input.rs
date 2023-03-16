@@ -4,4 +4,5 @@ use leafwing_input_manager::prelude::*;
 pub enum EditorAction {
     Move,
     Rotate,
+    Zoom,
 }
