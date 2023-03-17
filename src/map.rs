@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-use crate::{line_material::LineStrip, LineMaterial};
+use crate::{collision_groups, line_material::LineStrip, LineMaterial};
 
 pub fn spawn_map(
     mut commands: Commands,
@@ -43,6 +43,7 @@ pub fn spawn_map(
             ..default()
         },
         RigidBody::Fixed,
+        CollisionGroups::new(collision_groups::WALL, collision_groups::ALL),
         collider.clone(),
     ));
 
@@ -55,6 +56,7 @@ pub fn spawn_map(
             ..default()
         },
         RigidBody::Fixed,
+        CollisionGroups::new(collision_groups::WALL, collision_groups::ALL),
         collider.clone(),
     ));
 

@@ -33,6 +33,7 @@ mod enemy;
 mod line_material;
 mod map;
 mod player;
+mod render_layers;
 mod team;
 mod weapon;
 mod utils {

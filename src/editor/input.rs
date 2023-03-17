@@ -6,4 +6,6 @@ pub enum EditorAction {
     Rotate,
     Zoom,
     Select,
+    SpawnHandle,
+    SpawnLine,
 }

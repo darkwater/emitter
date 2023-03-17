@@ -12,10 +12,15 @@ use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_rapier3d::prelude::*;
 use leafwing_input_manager::{prelude::*, InputManagerBundle};
 
-use self::input::EditorAction;
-use crate::player::PlayerAimTarget;
+use self::{hover_effect::*, input::*, mesh::*};
+use crate::{
+    collision_groups,
+    line_material::{LineList, LineMaterial},
+};
 
+pub mod hover_effect;
 pub mod input;
+pub mod mesh;
 pub mod ui;
 
 pub struct EditorPlugin;
@@ -25,12 +30,21 @@ impl Plugin for EditorPlugin {
         app.add_plugin(DefaultInspectorConfigPlugin)
             .add_plugin(ui::EditorUiPlugin)
             .init_resource::<ui::UiState>()
+            .init_resource::<CursorHoveringEntity>()
+            .register_type::<CursorHoveringEntity>()
             .add_startup_system(spawn_window)
+            .add_startup_system(setup_effect)
             .add_system(camera_follow_focus)
             .add_system(move_camera_focus)
             .add_system(grab_cursor_on_move)
             .add_system(toggle_debug_render)
-            .add_system(click_to_select);
+            .add_system(click_to_select)
+            .add_system(spawn_point)
+            // .add_system(reset_hover_effect.before(click_to_select))
+            .add_system(set_hover_effect.after(click_to_select))
+            .add_system(update_hover_entity)
+            .add_system(spawn_line)
+            .add_system(update_lines);
     }
 }
 
@@ -43,6 +57,12 @@ pub struct EditorCamera;
 #[derive(Component)]
 pub struct EditorCameraFocus {
     distance: f32,
+}
+
+#[derive(Resource, Default, Reflect, FromReflect)]
+pub struct CursorHoveringEntity {
+    pub entity: Option<Entity>,
+    pub hovering_camera: bool,
 }
 
 pub fn spawn_window(mut commands: Commands) {
@@ -101,6 +121,8 @@ pub fn spawn_window(mut commands: Commands) {
                     },
                     EditorAction::Move,
                 )
+                .insert(KeyCode::R, EditorAction::SpawnLine)
+                .insert(KeyCode::T, EditorAction::SpawnHandle)
                 .build(),
         },
     ));
@@ -191,14 +213,79 @@ fn toggle_debug_render(
     debug_render.enabled = input.single().pressed(EditorAction::Select);
 }
 
-fn click_to_select(
-    input: Query<&ActionState<EditorAction>>,
+fn update_hover_entity(
     window: Query<&Window, With<EditorWindow>>,
     camera: Query<(&Camera, &GlobalTransform), With<EditorCamera>>,
     context: Res<RapierContext>,
+    mut hovering_entity: ResMut<CursorHoveringEntity>,
+) {
+    let Ok(window) = window.get_single() else { return };
+    let (camera, camera_transform) = camera.single();
+
+    let Some(cursor_position) = window.cursor_position() else {
+        hovering_entity.entity = None;
+        hovering_entity.hovering_camera = false;
+        return;
+    };
+
+    let viewport = camera.viewport.as_ref().unwrap();
+
+    let cursor_position = cursor_position
+        - Vec2::new(
+            viewport.physical_position.x as f32,
+            (window.physical_height() - (viewport.physical_position.y + viewport.physical_size.y))
+                as f32,
+        );
+
+    if cursor_position.x < 0.
+        || cursor_position.x > viewport.physical_size.x as f32
+        || cursor_position.y < 0.
+        || cursor_position.y > viewport.physical_size.y as f32
+    {
+        hovering_entity.entity = None;
+        hovering_entity.hovering_camera = false;
+        return;
+    }
+
+    let Some(ray) = camera.viewport_to_world(
+        camera_transform,
+        cursor_position,
+    ) else {
+        hovering_entity.entity = None;
+        return;
+    };
+
+    hovering_entity.entity = context
+        .cast_ray(ray.origin, ray.direction, 1000., true, QueryFilter::new())
+        .map(|(entity, _toi)| entity);
+
+    println!("{:?}", hovering_entity.entity);
+}
+
+fn click_to_select(
+    hovering_entity: Res<CursorHoveringEntity>,
+    input: Query<&ActionState<EditorAction>>,
     mut ui_state: ResMut<ui::UiState>,
 ) {
-    if !input.single().just_released(EditorAction::Select) {
+    if input.single().just_released(EditorAction::Select) {
+        if let Some(entity) = hovering_entity.entity {
+            ui_state.selected_entities.select_replace(entity);
+        } else {
+            ui_state.selected_entities.clear();
+        };
+    }
+}
+
+fn spawn_point(
+    input: Query<&ActionState<EditorAction>>,
+    window: Query<&Window, With<EditorWindow>>,
+    camera: Query<(&Camera, &GlobalTransform), With<EditorCamera>>,
+    mut ui_state: ResMut<ui::UiState>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<LineMaterial>>,
+) {
+    if !input.single().just_pressed(EditorAction::SpawnHandle) {
         return;
     }
 
@@ -224,16 +311,33 @@ fn click_to_select(
         return;
     };
 
-    let Some((entity, _toi)) = context.cast_ray(
-        ray.origin,
-        ray.direction,
-        1000.,
-        true,
-        QueryFilter::new(),
-    ) else {
-        ui_state.selected_entities.clear();
+    let Some(distance) = ray.intersect_plane(Vec3::ZERO, Vec3::Z) else {
         return;
     };
+
+    let position = ray.get_point(distance).round();
+
+    let entity = commands
+        .spawn((
+            MeshPoint,
+            // Transform::from_translation(position),
+            // GlobalTransform::default(),
+            Collider::ball(1.),
+            CollisionGroups::new(collision_groups::EDITOR_HANDLE, collision_groups::NONE),
+            HoverEffect,
+            MaterialMeshBundle {
+                mesh: meshes.add(Mesh::from(LineList {
+                    lines: vec![
+                        (Vec3::NEG_X + Vec3::NEG_Y, Vec3::X + Vec3::Y),
+                        (Vec3::NEG_X + Vec3::Y, Vec3::X + Vec3::NEG_Y),
+                    ],
+                })),
+                transform: Transform::from_translation(position),
+                material: materials.add(LineMaterial { color: Color::PURPLE * 5. }),
+                ..default()
+            },
+        ))
+        .id();
 
     ui_state.selected_entities.select_replace(entity);
 }

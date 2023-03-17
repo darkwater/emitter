@@ -9,7 +9,7 @@ edition = "2021"
 bevy = "0.10.0"
 bevy-inspector-egui = "0.18.0"
 bevy_egui = "0.20.1"
-bevy_hanabi = "0.6.0-dev"
+bevy_hanabi = "0.6.1"
 bevy_rapier3d = "0.21.0"
 big-brain = "0.17.0"
 egui = "0.21.0"
@@ -25,6 +25,3 @@ overflow-checks = false
 
 [profile.dev.package."*"]
 opt-level = 3
-
-[patch.crates-io]
-bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "ca4b28fef0be3711222dd8666b6171fd000f094b" }

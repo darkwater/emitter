@@ -16,7 +16,7 @@ use bevy_inspector_egui::{
     },
 };
 use egui_dock::{NodeIndex, Tree};
-use egui_gizmo::GizmoMode;
+use egui_gizmo::{GizmoMode, GizmoVisuals};
 use heck::ToTitleCase;
 
 use super::{EditorCamera, EditorWindow};
@@ -299,7 +299,12 @@ fn draw_gizmo(
                     .view_matrix(view_matrix.to_cols_array_2d())
                     .projection_matrix(projection_matrix.to_cols_array_2d())
                     .orientation(egui_gizmo::GizmoOrientation::Global)
+                    .snapping(true)
+                    .snap_distance(1.)
                     .mode(gizmo_mode)
+                    .visuals(GizmoVisuals {
+                        ..default()
+                    })
                     .interact(ui)
                 else { continue };
 
