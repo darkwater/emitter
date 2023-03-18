@@ -9,14 +9,6 @@ pub struct HoverEffect;
 #[derive(Component)]
 pub struct HoverEffectSpawner;
 
-// pub fn reset_hover_effect(mut query: Query<&mut ParticleEffect, With<HoverEffect>>) {
-//     for mut effect in query.iter_mut() {
-//         if let Some(spawner) = effect.maybe_spawner() {
-//             spawner.set_active(false);
-//         }
-//     }
-// }
-
 pub fn set_hover_effect(
     hovering_entity: Res<CursorHoveringEntity>,
     target: Query<&Transform, (With<HoverEffect>, Without<HoverEffectSpawner>)>,

@@ -9,5 +9,5 @@ var<uniform> material: LineMaterial;
 fn fragment(
     #import bevy_pbr::mesh_vertex_output
 ) -> @location(0) vec4<f32> {
-    return material.color;
+    return material.color * 10.;
 }

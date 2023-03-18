@@ -35,7 +35,7 @@ pub fn spawn_player(
         MaterialMeshBundle {
             mesh: meshes.add(Mesh::from(LineList { lines })),
             transform: Transform::from_xyz(0., 0., 0.),
-            material: materials.add(LineMaterial { color: Color::ORANGE * 5. }),
+            material: materials.add(LineMaterial { color: Color::ORANGE }),
             ..default()
         },
         ShipEngine { power: 40., ..Default::default() },
@@ -50,7 +50,7 @@ pub fn spawn_player(
             damage: 1.,
             velocity: 50.,
             spread: 0.,
-            color: Color::RED * 5.,
+            color: Color::RED,
         },
         WeaponTrigger::default(),
         Team::Player,
@@ -84,7 +84,7 @@ pub fn spawn_player(
                 ],
             })),
             transform: Transform::from_translation(Vec3::X * 9999.),
-            material: materials.add(LineMaterial { color: Color::ORANGE * 5. }),
+            material: materials.add(LineMaterial { color: Color::ORANGE }),
             ..default()
         },
         PlayerAimTarget,

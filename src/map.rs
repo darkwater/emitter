@@ -39,7 +39,7 @@ pub fn spawn_map(
             mesh: triangle.clone(),
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.))
                 .with_translation(Vec3::X * 18. + Vec3::Y * 18.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            material: materials.add(LineMaterial { color: Color::CYAN }),
             ..default()
         },
         RigidBody::Fixed,
@@ -52,7 +52,7 @@ pub fn spawn_map(
             mesh: triangle.clone(),
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.5))
                 .with_translation(Vec3::X * -18. + Vec3::Y * 18.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            material: materials.add(LineMaterial { color: Color::CYAN }),
             ..default()
         },
         RigidBody::Fixed,
@@ -65,7 +65,7 @@ pub fn spawn_map(
             mesh: triangle.clone(),
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.))
                 .with_translation(Vec3::X * -18. + Vec3::Y * -18.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            material: materials.add(LineMaterial { color: Color::CYAN }),
             ..default()
         },
         RigidBody::Fixed,
@@ -77,7 +77,7 @@ pub fn spawn_map(
             mesh: triangle.clone(),
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.5))
                 .with_translation(Vec3::X * 18. + Vec3::Y * -18.),
-            material: materials.add(LineMaterial { color: Color::CYAN * 4. }),
+            material: materials.add(LineMaterial { color: Color::CYAN }),
             ..default()
         },
         RigidBody::Fixed,
@@ -90,7 +90,7 @@ pub fn spawn_map(
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.25))
                 .with_translation(Vec3::Y * 40.)
                 .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
+            material: materials.add(LineMaterial { color: Color::BLUE }),
             ..default()
         },
         RigidBody::Fixed,
@@ -103,7 +103,7 @@ pub fn spawn_map(
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 1.75))
                 .with_translation(Vec3::X * -40.)
                 .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
+            material: materials.add(LineMaterial { color: Color::BLUE }),
             ..default()
         },
         RigidBody::Fixed,
@@ -116,7 +116,7 @@ pub fn spawn_map(
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.25))
                 .with_translation(Vec3::Y * -40.)
                 .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
+            material: materials.add(LineMaterial { color: Color::BLUE }),
             ..default()
         },
         RigidBody::Fixed,
@@ -129,7 +129,7 @@ pub fn spawn_map(
             transform: Transform::from_rotation(Quat::from_rotation_z(PI * 0.75))
                 .with_translation(Vec3::X * 40.)
                 .with_scale(Vec3::new(3., 3., 1.5)),
-            material: materials.add(LineMaterial { color: Color::BLUE * 4. }),
+            material: materials.add(LineMaterial { color: Color::BLUE }),
             ..default()
         },
         RigidBody::Fixed,

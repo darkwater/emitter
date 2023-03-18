@@ -15,11 +15,22 @@ use bevy_inspector_egui::{
         ui_for_entities_shared_components, ui_for_entity_with_children,
     },
 };
+use bevy_rapier3d::{
+    prelude::{Collider, CollisionGroups, RigidBody},
+    render::DebugRenderContext,
+};
 use egui_dock::{NodeIndex, Tree};
 use egui_gizmo::{GizmoMode, GizmoVisuals};
 use heck::ToTitleCase;
 
-use super::{EditorCamera, EditorWindow};
+use super::{
+    mesh::{DeleteConnectedLines, MeshLine, MeshPoint, Solidify},
+    EditorCamera, EditorWindow,
+};
+use crate::{
+    collision_groups,
+    line_material::{LineList, LineMaterial},
+};
 
 pub struct EditorUiPlugin;
 
@@ -40,28 +51,22 @@ impl Plugin for EditorUiPlugin {
 }
 
 #[derive(Debug)]
-enum EguiWindow {
+pub enum EguiWindow {
     GameView,
     Hierarchy,
     Resources,
     Assets,
     Inspector,
     MapTools,
+    Options,
 }
 
 #[derive(Eq, PartialEq)]
-enum InspectorSelection {
+pub enum InspectorSelection {
+    None,
     Entities,
     Resource(TypeId, String),
     Asset(TypeId, String, HandleId),
-}
-
-struct TabViewer<'a> {
-    world: &'a mut World,
-    selected_entities: &'a mut SelectedEntities,
-    selection: &'a mut InspectorSelection,
-    viewport_rect: &'a mut egui::Rect,
-    gizmo_mode: &'a mut GizmoMode,
 }
 
 fn show_ui_system(world: &mut World) {
@@ -71,6 +76,12 @@ fn show_ui_system(world: &mut World) {
     let mut egui_context = egui_context.clone();
 
     world.resource_scope::<UiState, _>(|world, mut ui_state| {
+        egui::TopBottomPanel::top("menu_bar").show(egui_context.get_mut(), |ui| {
+            ui.horizontal(|ui| {
+                ui.menu_button("Scene", |ui| ui.button("Save"));
+            });
+        });
+
         ui_state.ui(world, egui_context.get_mut())
     });
 }
@@ -99,29 +110,37 @@ fn set_camera_viewport(
 
 #[derive(Resource)]
 pub struct UiState {
-    tree: Tree<EguiWindow>,
-    viewport_rect: egui::Rect,
+    pub tree: Tree<EguiWindow>,
+    pub viewport_rect: egui::Rect,
     pub selected_entities: SelectedEntities,
-    selection: InspectorSelection,
-    gizmo_mode: GizmoMode,
+    pub selection: InspectorSelection,
+    pub gizmo_mode: GizmoMode,
+    pub hovering_camera: bool,
 }
 
 impl UiState {
     pub fn new() -> Self {
         let mut tree = Tree::new(vec![EguiWindow::GameView]);
-        let [game, _inspector] =
-            tree.split_right(NodeIndex::root(), 0.75, vec![EguiWindow::Inspector]);
-        let [game, _hierarchy] =
-            tree.split_left(game, 0.2, vec![EguiWindow::MapTools, EguiWindow::Hierarchy]);
-        let [_game, _bottom] =
-            tree.split_below(game, 0.8, vec![EguiWindow::Resources, EguiWindow::Assets]);
+
+        let [camera, right_panel] =
+            tree.split_right(NodeIndex::root(), 0.75, vec![EguiWindow::Options]);
+
+        let [_right_top, _right_bottom] =
+            tree.split_below(right_panel, 0.5, vec![EguiWindow::Inspector]);
+
+        let [camera, _left_panel] =
+            tree.split_left(camera, 0.2, vec![EguiWindow::MapTools, EguiWindow::Hierarchy]);
+
+        let [_camera, _bottom_panel] =
+            tree.split_below(camera, 0.8, vec![EguiWindow::Resources, EguiWindow::Assets]);
 
         Self {
             tree,
             selected_entities: SelectedEntities::default(),
-            selection: InspectorSelection::Entities,
+            selection: InspectorSelection::None,
             viewport_rect: egui::Rect::NOTHING,
             gizmo_mode: GizmoMode::Translate,
+            hovering_camera: false,
         }
     }
 
@@ -141,6 +160,14 @@ impl Default for UiState {
     fn default() -> Self {
         Self::new()
     }
+}
+
+struct TabViewer<'a> {
+    world: &'a mut World,
+    selected_entities: &'a mut SelectedEntities,
+    selection: &'a mut InspectorSelection,
+    viewport_rect: &'a mut egui::Rect,
+    gizmo_mode: &'a mut GizmoMode,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -190,6 +217,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                         &type_registry,
                     );
                 }
+                InspectorSelection::None => {}
             },
             EguiWindow::MapTools => {
                 egui::ComboBox::from_id_source("gizmo_mode")
@@ -199,6 +227,32 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                         ui.selectable_value(self.gizmo_mode, GizmoMode::Rotate, "Rotate");
                         ui.selectable_value(self.gizmo_mode, GizmoMode::Scale, "Scale");
                     });
+
+                if ui.button("Toggle hitboxes").clicked() {
+                    let mut debug_render = self.world.resource_mut::<DebugRenderContext>();
+                    debug_render.enabled = !debug_render.enabled;
+                }
+            }
+            EguiWindow::Options => {
+                let mut line_query = self.world.query::<(Entity, &MeshLine)>();
+
+                if let InspectorSelection::Entities = self.selection {
+                    if ui.button("Delete entity").clicked() {
+                        for entity in self.selected_entities.as_slice() {
+                            self.world.despawn(*entity);
+                        }
+                        self.selected_entities.clear();
+                    }
+
+                    if ui.button("Delete connected lines").clicked() {
+                        self.world.send_event(DeleteConnectedLines);
+                    }
+                } else if line_query.iter(self.world).next().is_some() {
+                    let button = ui.button("Solidify mesh");
+                    if button.clicked() {
+                        self.world.send_event(Solidify);
+                    }
+                }
             }
         }
     }
@@ -286,10 +340,6 @@ fn draw_gizmo(
     let view_matrix = Mat4::from(cam_transform.affine().inverse());
     let projection_matrix = projection.get_projection_matrix();
 
-    // if selected_entities.len() != 1 {
-    //     return;
-    // }
-
     for selected in selected_entities.iter() {
         let Some(transform) = world.get::<Transform>(selected) else { continue };
         let model_matrix = transform.compute_matrix();
@@ -316,15 +366,3 @@ fn draw_gizmo(
         };
     }
 }
-
-// fn set_gizmo_mode(input: Res<Input<KeyCode>>, mut ui_state: ResMut<UiState>) {
-//     for (key, mode) in [
-//         (KeyCode::R, GizmoMode::Rotate),
-//         (KeyCode::T, GizmoMode::Translate),
-//         (KeyCode::S, GizmoMode::Scale),
-//     ] {
-//         if input.just_pressed(key) {
-//             ui_state.gizmo_mode = mode;
-//         }
-//     }
-// }

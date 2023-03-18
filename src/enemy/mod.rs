@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-use self::amoeba::AmoebaSpawnToken;
 use crate::{damageable::Damageable, player::PlayerShip, team::Team};
 
 pub mod amoeba;
@@ -23,17 +22,10 @@ pub struct ContactDamage {
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup)
-            .add_system(amoeba::spawn_amoeba)
+        app.add_system(amoeba::spawn_amoeba)
             .add_system(contact_damage_system)
             .add_plugin(behaviour::chase::PlayerChaserPlugin)
             .register_type::<ContactDamage>();
-    }
-}
-
-fn setup(mut commands: Commands) {
-    for n in 0..20 {
-        commands.spawn((Transform::from_xyz(-20. + n as f32, 0. - n as f32, 0.), AmoebaSpawnToken));
     }
 }
 
