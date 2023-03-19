@@ -15,21 +15,16 @@ use bevy_inspector_egui::{
         ui_for_entities_shared_components, ui_for_entity_with_children,
     },
 };
-use bevy_rapier3d::{
-    prelude::{Collider, CollisionGroups, RigidBody},
-    render::DebugRenderContext,
-};
+use bevy_rapier3d::render::DebugRenderContext;
+use egui::{epaint::Hsva, Rgba};
 use egui_dock::{NodeIndex, Tree};
 use egui_gizmo::{GizmoMode, GizmoVisuals};
 use heck::ToTitleCase;
 
 use super::{
-    mesh::{DeleteConnectedLines, MeshLine, MeshPoint, Solidify},
+    mesh::{DeleteConnectedLines, MeshLine, Solidify},
+    scene::SaveScene,
     EditorCamera, EditorWindow,
-};
-use crate::{
-    collision_groups,
-    line_material::{LineList, LineMaterial},
 };
 
 pub struct EditorUiPlugin;
@@ -75,14 +70,21 @@ fn show_ui_system(world: &mut World) {
         .get_single(world) else { return };
     let mut egui_context = egui_context.clone();
 
-    world.resource_scope::<UiState, _>(|world, mut ui_state| {
+    world.resource_scope::<UiTreeState, _>(|world, mut tree_state| {
         egui::TopBottomPanel::top("menu_bar").show(egui_context.get_mut(), |ui| {
             ui.horizontal(|ui| {
-                ui.menu_button("Scene", |ui| ui.button("Save"));
+                ui.menu_button("Map", |ui| {
+                    if ui.button("Save").clicked() {
+                        world.send_event(SaveScene);
+                        ui.close_menu();
+                    }
+                });
             });
         });
 
-        ui_state.ui(world, egui_context.get_mut())
+        world.resource_scope::<UiState, _>(|world, mut ui_state| {
+            tree_state.ui(world, egui_context.get_mut(), ui_state.as_mut())
+        });
     });
 }
 
@@ -109,16 +111,48 @@ fn set_camera_viewport(
 }
 
 #[derive(Resource)]
-pub struct UiState {
+pub struct UiTreeState {
     pub tree: Tree<EguiWindow>,
+}
+
+#[derive(Resource)]
+pub struct UiState {
     pub viewport_rect: egui::Rect,
     pub selected_entities: SelectedEntities,
     pub selection: InspectorSelection,
     pub gizmo_mode: GizmoMode,
     pub hovering_camera: bool,
+    pub new_mesh_props: NewMeshProperties,
 }
 
-impl UiState {
+impl Default for UiState {
+    fn default() -> Self {
+        UiState {
+            selected_entities: SelectedEntities::default(),
+            selection: InspectorSelection::None,
+            viewport_rect: egui::Rect::NOTHING,
+            gizmo_mode: GizmoMode::Translate,
+            hovering_camera: false,
+            new_mesh_props: NewMeshProperties {
+                color: Color::rgb(0., 0.5, 1.),
+                intensity: 2.0,
+            },
+        }
+    }
+}
+
+pub struct NewMeshProperties {
+    pub color: Color,
+    pub intensity: f32,
+}
+
+impl NewMeshProperties {
+    pub fn color(&self) -> Color {
+        self.color * self.intensity
+    }
+}
+
+impl UiTreeState {
     pub fn new() -> Self {
         let mut tree = Tree::new(vec![EguiWindow::GameView]);
 
@@ -134,40 +168,36 @@ impl UiState {
         let [_camera, _bottom_panel] =
             tree.split_below(camera, 0.8, vec![EguiWindow::Resources, EguiWindow::Assets]);
 
-        Self {
-            tree,
-            selected_entities: SelectedEntities::default(),
-            selection: InspectorSelection::None,
-            viewport_rect: egui::Rect::NOTHING,
-            gizmo_mode: GizmoMode::Translate,
-            hovering_camera: false,
-        }
+        Self { tree }
     }
 
-    fn ui(&mut self, world: &mut World, ctx: &mut egui::Context) {
+    fn ui(&mut self, world: &mut World, ctx: &mut egui::Context, state: &mut UiState) {
         let mut tab_viewer = TabViewer {
+            state,
             world,
-            viewport_rect: &mut self.viewport_rect,
-            selected_entities: &mut self.selected_entities,
-            selection: &mut self.selection,
-            gizmo_mode: &mut self.gizmo_mode,
+            // world,
+            // viewport_rect: &mut self.viewport_rect,
+            // selected_entities: &mut self.selected_entities,
+            // selection: &mut self.selection,
+            // gizmo_mode: &mut self.gizmo_mode,
         };
         egui_dock::DockArea::new(&mut self.tree).show(ctx, &mut tab_viewer);
     }
 }
 
-impl Default for UiState {
+impl Default for UiTreeState {
     fn default() -> Self {
         Self::new()
     }
 }
 
 struct TabViewer<'a> {
+    state: &'a mut UiState,
     world: &'a mut World,
-    selected_entities: &'a mut SelectedEntities,
-    selection: &'a mut InspectorSelection,
-    viewport_rect: &'a mut egui::Rect,
-    gizmo_mode: &'a mut GizmoMode,
+    // selected_entities: &'a mut SelectedEntities,
+    // selection: &'a mut InspectorSelection,
+    // viewport_rect: &'a mut egui::Rect,
+    // gizmo_mode: &'a mut GizmoMode,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -179,21 +209,23 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
         match window {
             EguiWindow::GameView => {
-                (*self.viewport_rect, _) =
+                (self.state.viewport_rect, _) =
                     ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
 
-                draw_gizmo(ui, self.world, self.selected_entities, *self.gizmo_mode);
+                draw_gizmo(ui, self.world, &self.state.selected_entities, self.state.gizmo_mode);
             }
             EguiWindow::Hierarchy => {
-                let selected = hierarchy_ui(self.world, ui, self.selected_entities);
+                let selected = hierarchy_ui(self.world, ui, &mut self.state.selected_entities);
                 if selected {
-                    *self.selection = InspectorSelection::Entities;
+                    self.state.selection = InspectorSelection::Entities;
                 }
             }
-            EguiWindow::Resources => select_resource(ui, &type_registry, self.selection),
-            EguiWindow::Assets => select_asset(ui, &type_registry, self.world, self.selection),
-            EguiWindow::Inspector => match *self.selection {
-                InspectorSelection::Entities => match self.selected_entities.as_slice() {
+            EguiWindow::Resources => select_resource(ui, &type_registry, &mut self.state.selection),
+            EguiWindow::Assets => {
+                select_asset(ui, &type_registry, self.world, &mut self.state.selection)
+            }
+            EguiWindow::Inspector => match self.state.selection {
+                InspectorSelection::Entities => match self.state.selected_entities.as_slice() {
                     &[entity] => ui_for_entity_with_children(self.world, entity, ui),
                     entities => ui_for_entities_shared_components(self.world, entities, ui),
                 },
@@ -220,38 +252,67 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 InspectorSelection::None => {}
             },
             EguiWindow::MapTools => {
-                egui::ComboBox::from_id_source("gizmo_mode")
-                    .selected_text(format!("{:?}", self.gizmo_mode))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(self.gizmo_mode, GizmoMode::Translate, "Translate");
-                        ui.selectable_value(self.gizmo_mode, GizmoMode::Rotate, "Rotate");
-                        ui.selectable_value(self.gizmo_mode, GizmoMode::Scale, "Scale");
-                    });
+                // egui::ComboBox::from_id_source("gizmo_mode")
+                //     .selected_text(format!("{:?}", self.state.gizmo_mode))
+                //     .show_ui(ui, |ui| {
+                //         ui.selectable_value(
+                //             &mut self.state.gizmo_mode,
+                //             GizmoMode::Translate,
+                //             "Translate",
+                //         );
+                //         ui.selectable_value(
+                //             &mut self.state.gizmo_mode,
+                //             GizmoMode::Rotate,
+                //             "Rotate",
+                //         );
+                //         ui.selectable_value(&mut self.state.gizmo_mode, GizmoMode::Scale, "Scale");
+                //     });
 
-                if ui.button("Toggle hitboxes").clicked() {
-                    let mut debug_render = self.world.resource_mut::<DebugRenderContext>();
-                    debug_render.enabled = !debug_render.enabled;
-                }
+                ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Translate, "Translate");
+                ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Rotate, "Rotate");
+                ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Scale, "Scale");
+
+                ui.separator();
+
+                let mut debug_render = self.world.resource_mut::<DebugRenderContext>();
+                ui.checkbox(&mut debug_render.enabled, "Show hitboxes");
             }
             EguiWindow::Options => {
                 let mut line_query = self.world.query::<(Entity, &MeshLine)>();
 
-                if let InspectorSelection::Entities = self.selection {
+                if let InspectorSelection::Entities = self.state.selection {
                     if ui.button("Delete entity").clicked() {
-                        for entity in self.selected_entities.as_slice() {
+                        for entity in self.state.selected_entities.as_slice() {
                             self.world.despawn(*entity);
                         }
-                        self.selected_entities.clear();
+                        self.state.selected_entities.clear();
                     }
 
                     if ui.button("Delete connected lines").clicked() {
                         self.world.send_event(DeleteConnectedLines);
                     }
                 } else if line_query.iter(self.world).next().is_some() {
+                    ui.separator();
                     let button = ui.button("Solidify mesh");
                     if button.clicked() {
                         self.world.send_event(Solidify);
                     }
+
+                    ui.horizontal_wrapped(|ui| {
+                        for hue in (0..360).step_by(15) {
+                            let color = Hsva::new(hue as f32 / 360., 1., 1., 1.).into();
+
+                            if color_button(ui, color).clicked() {
+                                self.state.new_mesh_props.color =
+                                    Rgba::from(color).to_array().into();
+                            }
+                        }
+                    });
+
+                    ui.add(
+                        egui::Slider::new(&mut self.state.new_mesh_props.intensity, 0.1..=10.)
+                            .text("Intensity"),
+                    );
                 }
             }
         }
@@ -264,6 +325,22 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     fn clear_background(&self, window: &Self::Tab) -> bool {
         !matches!(window, EguiWindow::GameView)
     }
+}
+
+fn color_button(ui: &mut egui::Ui, color: egui::Color32) -> egui::Response {
+    let size = ui.spacing().interact_size;
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    response.widget_info(|| egui::WidgetInfo::new(egui::WidgetType::ColorButton));
+
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.style().interact(&response);
+        let rect = rect.expand(visuals.expansion);
+
+        ui.painter().rect_filled(rect, 0., color);
+        ui.painter().rect_stroke(rect, 0., (2., visuals.bg_fill));
+    }
+
+    response
 }
 
 fn select_resource(

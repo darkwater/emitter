@@ -23,6 +23,7 @@ use crate::line_material::LineMaterial;
 pub mod hover_effect;
 pub mod input;
 pub mod mesh;
+pub mod scene;
 pub mod ui;
 
 pub struct EditorPlugin;
@@ -31,6 +32,8 @@ impl Plugin for EditorPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(DefaultInspectorConfigPlugin)
             .add_plugin(ui::EditorUiPlugin)
+            .add_plugin(scene::ScenePlugin)
+            .init_resource::<ui::UiTreeState>()
             .init_resource::<ui::UiState>()
             .init_resource::<CursorHoveringEntity>()
             .register_type::<CursorHoveringEntity>()
@@ -275,7 +278,7 @@ fn update_hover_entity(
 fn click_to_select(
     hovering_entity: Res<CursorHoveringEntity>,
     input: Query<&ActionState<EditorAction>>,
-    mut ui_state: ResMut<ui::UiState>,
+    mut ui_state: ResMut<UiState>,
 ) {
     if !ui_state.hovering_camera {
         return;

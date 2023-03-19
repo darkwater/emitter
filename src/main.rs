@@ -31,7 +31,6 @@ mod damageable;
 mod editor;
 mod enemy;
 mod line_material;
-mod map;
 mod player;
 mod render_layers;
 mod team;
@@ -84,6 +83,7 @@ fn main() {
         .insert_resource(ToggleActions::<EditorAction>::DISABLED)
         .add_startup_system(setup_windows_cameras)
         .add_startup_system(disable_gravity)
+        .add_startup_system(load_scene)
         // .add_startup_system(map::spawn_map)
         .add_system(cycle_msaa)
         .add_system(despawn_if_dead)
@@ -120,6 +120,15 @@ fn setup_windows_cameras(mut commands: Commands, mut windows: Query<Entity, With
         BloomSettings::default(),
         PlayerFollower,
     ));
+}
+
+fn load_scene(
+    commands: Commands,
+    // asset_server: Res<AssetServer>,
+    materials: ResMut<Assets<LineMaterial>>,
+    meshes: ResMut<Assets<Mesh>>,
+) {
+    editor::scene::load_scene("assets/maps/world.scn.ron", commands, materials, meshes);
 }
 
 fn cycle_msaa(input: Res<Input<KeyCode>>, mut msaa: ResMut<Msaa>) {

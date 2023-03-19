@@ -72,12 +72,12 @@ pub fn spawn_point(
             MaterialMeshBundle {
                 mesh: meshes.add(Mesh::from(LineList {
                     lines: vec![
-                        (Vec3::NEG_X * 0.5, Vec3::X * 0.5),
-                        (Vec3::NEG_Y * 0.5, Vec3::Y * 0.5),
-                        (Vec3::NEG_Z * 0.5, Vec3::Z * 0.5),
+                        (Vec3::NEG_X * 0.3, Vec3::X * 0.3),
+                        (Vec3::NEG_Y * 0.3, Vec3::Y * 0.3),
+                        (Vec3::NEG_Z * 0.3, Vec3::Z * 0.3),
                     ],
                 })),
-                transform: Transform::from_translation(position).with_scale(Vec3::splat(0.5)),
+                transform: Transform::from_translation(position),
                 material: materials.add(LineMaterial { color: Color::PURPLE }),
                 ..default()
             },
@@ -123,15 +123,19 @@ pub fn spawn_line(
 }
 
 pub fn update_lines(
-    mut lines: Query<(&mut Transform, &MeshLine)>,
+    mut lines: Query<(&mut Transform, &Handle<LineMaterial>, &MeshLine)>,
     entities: Query<&Transform, Without<MeshLine>>,
+    ui_state: Res<UiState>,
+    mut materials: ResMut<Assets<LineMaterial>>,
 ) {
-    for (mut transform, line) in lines.iter_mut() {
+    for (mut transform, material, line) in lines.iter_mut() {
         let start = entities.get(line.start).unwrap();
         let end = entities.get(line.end).unwrap();
 
         transform.translation = start.translation;
         transform.scale = end.translation - start.translation;
+
+        materials.get_mut(material).unwrap().color = ui_state.new_mesh_props.color();
     }
 }
 
@@ -141,6 +145,7 @@ pub fn solidify(
     mut event_reader: EventReader<Solidify>,
     point_query: Query<(Entity, &Transform, &MeshPoint)>,
     line_query: Query<(Entity, &MeshLine)>,
+    ui_state: Res<UiState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<LineMaterial>>,
     mut commands: Commands,
@@ -183,7 +188,9 @@ pub fn solidify(
     commands.spawn((
         MaterialMeshBundle {
             mesh: meshes.add(LineList { lines }.into()),
-            material: materials.add(LineMaterial { color: Color::CYAN }),
+            material: materials.add(LineMaterial {
+                color: ui_state.new_mesh_props.color(),
+            }),
             ..default()
         },
         RigidBody::Fixed,

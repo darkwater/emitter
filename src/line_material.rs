@@ -10,6 +10,7 @@ use bevy::{
         },
     },
 };
+use serde::{Deserialize, Serialize};
 
 #[derive(Default, Reflect, FromReflect, AsBindGroup, TypeUuid, Debug, Clone)]
 #[uuid = "050ce6ac-080a-4d8c-b6b5-b5bab7560d8f"]
@@ -36,7 +37,7 @@ impl Material for LineMaterial {
 }
 
 /// A list of lines with a start and end position
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LineList {
     pub lines: Vec<(Vec3, Vec3)>,
 }
