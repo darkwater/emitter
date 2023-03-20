@@ -142,12 +142,8 @@ fn setup_windows_cameras(mut commands: Commands, mut windows: Query<Entity, With
     ));
 }
 
-fn load_scene(
-    commands: Commands,
-    materials: ResMut<Assets<LineMaterial>>,
-    meshes: ResMut<Assets<Mesh>>,
-) {
-    editor::scene::load_scene("assets/maps/world.map.ron", commands, materials, meshes);
+fn load_scene(commands: Commands, meshes: ResMut<Assets<Mesh>>) {
+    editor::scene::load_scene("assets/maps/world.map.ron", commands, meshes);
 }
 
 fn cycle_msaa(input: Res<Input<KeyCode>>, mut msaa: ResMut<Msaa>) {

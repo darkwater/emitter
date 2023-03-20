@@ -1,6 +1,6 @@
 use bevy::{
     asset::{AssetLoader, LoadedAsset},
-    prelude::{Color, Transform},
+    prelude::Transform,
     reflect::TypeUuid,
 };
 use serde::{Deserialize, Serialize};

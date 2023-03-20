@@ -1,6 +1,6 @@
 use std::{fs::File, io::Write, path::Path};
 
-use bevy::{asset::AssetPath, prelude::*, render::mesh::VertexAttributeValues, tasks::IoTaskPool};
+use bevy::{prelude::*, render::mesh::VertexAttributeValues, tasks::IoTaskPool};
 use bevy_rapier3d::prelude::*;
 use itertools::Itertools;
 
@@ -141,7 +141,6 @@ pub fn save_scene(
 pub fn load_scene<P: AsRef<Path>>(
     path: P,
     mut commands: Commands,
-    mut materials: ResMut<Assets<LineMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     let file = File::open(path).unwrap();

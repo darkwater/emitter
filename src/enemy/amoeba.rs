@@ -12,7 +12,6 @@ use crate::{
     line_material::LineList,
     team::Team,
     utils::{drawing::circle, zlock::ZLocked},
-    LineMaterial,
 };
 
 #[derive(Component)]
@@ -22,7 +21,6 @@ pub fn spawn_amoeba(
     query: Query<(Entity, &Transform), With<AmoebaSpawnToken>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<LineMaterial>>,
 ) {
     for (entity, transform) in query.iter() {
         commands.entity(entity).despawn_recursive();

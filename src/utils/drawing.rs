@@ -16,7 +16,7 @@ pub fn circle(radius: f32, segments: usize) -> Vec<(Vec3, Vec3)> {
     vertices
 }
 
-pub fn arc(
+pub fn _arc(
     radius: f32,
     start: f32,
     end: f32,

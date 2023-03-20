@@ -146,7 +146,6 @@ pub fn spawn_line(
     mut ui_state: ResMut<UiState>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<LineMaterial>>,
 ) {
     if !input.single().just_pressed(EditorAction::SpawnLine) {
         return;
@@ -290,7 +289,6 @@ pub fn solidify(
     line_query: Query<(Entity, &MeshLine)>,
     ui_state: Res<UiState>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<LineMaterial>>,
     mut commands: Commands,
 ) {
     if event_reader.iter().next().is_none() {
