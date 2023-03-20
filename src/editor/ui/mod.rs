@@ -22,7 +22,7 @@ use egui_gizmo::{GizmoMode, GizmoVisuals};
 use heck::ToTitleCase;
 
 use super::{
-    mesh::{DeleteConnectedLines, MeshLine, Solidify},
+    mesh::{DeleteConnectedLines, ExplodeMesh, MeshLine, Solidify},
     scene::SaveScene,
     EditorCamera, EditorWindow,
 };
@@ -31,17 +31,18 @@ pub struct EditorUiPlugin;
 
 impl Plugin for EditorUiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(
-            show_ui_system
-                .in_base_set(CoreSet::PostUpdate)
-                .before(EguiSet::ProcessOutput)
-                .before(bevy::transform::TransformSystem::TransformPropagate),
-        )
-        .add_system(
-            set_camera_viewport
-                .in_base_set(CoreSet::PostUpdate)
-                .after(show_ui_system),
-        );
+        app.register_type::<NewMeshProperties>()
+            .add_system(
+                show_ui_system
+                    .in_base_set(CoreSet::PostUpdate)
+                    .before(EguiSet::ProcessOutput)
+                    .before(bevy::transform::TransformSystem::TransformPropagate),
+            )
+            .add_system(
+                set_camera_viewport
+                    .in_base_set(CoreSet::PostUpdate)
+                    .after(show_ui_system),
+            );
     }
 }
 
@@ -141,6 +142,7 @@ impl Default for UiState {
     }
 }
 
+#[derive(Reflect, FromReflect)]
 pub struct NewMeshProperties {
     pub color: Color,
     pub intensity: f32,
@@ -252,22 +254,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 InspectorSelection::None => {}
             },
             EguiWindow::MapTools => {
-                // egui::ComboBox::from_id_source("gizmo_mode")
-                //     .selected_text(format!("{:?}", self.state.gizmo_mode))
-                //     .show_ui(ui, |ui| {
-                //         ui.selectable_value(
-                //             &mut self.state.gizmo_mode,
-                //             GizmoMode::Translate,
-                //             "Translate",
-                //         );
-                //         ui.selectable_value(
-                //             &mut self.state.gizmo_mode,
-                //             GizmoMode::Rotate,
-                //             "Rotate",
-                //         );
-                //         ui.selectable_value(&mut self.state.gizmo_mode, GizmoMode::Scale, "Scale");
-                //     });
-
                 ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Translate, "Translate");
                 ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Rotate, "Rotate");
                 ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Scale, "Scale");
@@ -276,11 +262,18 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
                 let mut debug_render = self.world.resource_mut::<DebugRenderContext>();
                 ui.checkbox(&mut debug_render.enabled, "Show hitboxes");
-            }
-            EguiWindow::Options => {
+
+                // }
+                // EguiWindow::Options => {
+                ui.separator();
+
                 let mut line_query = self.world.query::<(Entity, &MeshLine)>();
 
                 if let InspectorSelection::Entities = self.state.selection {
+                    if ui.button("Explode entity").clicked() {
+                        self.world.send_event(ExplodeMesh);
+                    }
+
                     if ui.button("Delete entity").clicked() {
                         for entity in self.state.selected_entities.as_slice() {
                             self.world.despawn(*entity);
@@ -311,10 +304,18 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
                     ui.add(
                         egui::Slider::new(&mut self.state.new_mesh_props.intensity, 0.1..=10.)
+                            .step_by(0.5)
                             .text("Intensity"),
+                    );
+
+                    bevy_inspector_egui::reflect_inspector::ui_for_value(
+                        &mut self.state.new_mesh_props,
+                        ui,
+                        &type_registry,
                     );
                 }
             }
+            EguiWindow::Options => {}
         }
     }
 

@@ -50,9 +50,10 @@ impl BulletBundle {
             mesh: MaterialMeshBundle {
                 mesh: meshes.add(Mesh::from(LineList {
                     lines: vec![(Vec3::X * -0.5, Vec3::X * 0.5)],
+                    color,
                 })),
                 transform,
-                material: materials.add(LineMaterial { color }),
+                material: materials.add(LineMaterial::default()),
                 ..default()
             },
             body: RigidBody::Dynamic,

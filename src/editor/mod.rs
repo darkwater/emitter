@@ -49,8 +49,10 @@ impl Plugin for EditorPlugin {
             .add_system(spawn_point)
             .add_system(spawn_line)
             .add_system(update_lines)
+            .add_system(explode_mesh)
             .add_event::<Solidify>()
             .add_event::<DeleteConnectedLines>()
+            .add_event::<ExplodeMesh>()
             .add_system(solidify)
             .add_system(delete_connected_lines);
     }

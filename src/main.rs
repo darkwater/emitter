@@ -1,5 +1,7 @@
+#![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
+use assets::AssetsPlugin;
 use bevy::{
     core_pipeline::{
         bloom::BloomSettings, clear_color::ClearColorConfig, tonemapping::Tonemapping,
@@ -25,6 +27,7 @@ use crate::{
     weapon::WeaponPlugin,
 };
 
+mod assets;
 mod bullet;
 mod collision_groups;
 mod damageable;
@@ -68,7 +71,8 @@ fn main() {
                         ..default()
                     }),
                     ..default()
-                }),
+                })
+                .set(AssetPlugin { watch_for_changes: true, ..default() }),
         )
         .add_plugin(MaterialPlugin::<LineMaterial>::default())
         .register_type::<LineMaterial>()
@@ -88,6 +92,8 @@ fn main() {
         .add_system(cycle_msaa)
         .add_system(despawn_if_dead)
         .add_system(handle_window_focus_events)
+        .add_system(replace_standard_material)
+        .add_plugin(AssetsPlugin)
         .add_plugin(PlayerPlugin)
         .add_plugin(WeaponPlugin)
         .add_plugin(BulletPlugin)
@@ -95,6 +101,20 @@ fn main() {
         .add_plugin(ZLockPlugin)
         .add_plugin(EditorPlugin)
         .run();
+}
+
+fn replace_standard_material(
+    mut query: Query<Entity, With<Handle<StandardMaterial>>>,
+    mut commands: Commands,
+    mut line_materials: ResMut<Assets<LineMaterial>>,
+) {
+    for entity in query.iter_mut() {
+        println!("replacing");
+        commands
+            .entity(entity)
+            .remove::<Handle<StandardMaterial>>()
+            .insert(line_materials.add(LineMaterial::default()));
+    }
 }
 
 fn disable_gravity(mut conf: ResMut<RapierConfiguration>) {
@@ -124,11 +144,10 @@ fn setup_windows_cameras(mut commands: Commands, mut windows: Query<Entity, With
 
 fn load_scene(
     commands: Commands,
-    // asset_server: Res<AssetServer>,
     materials: ResMut<Assets<LineMaterial>>,
     meshes: ResMut<Assets<Mesh>>,
 ) {
-    editor::scene::load_scene("assets/maps/world.scn.ron", commands, materials, meshes);
+    editor::scene::load_scene("assets/maps/world.map.ron", commands, materials, meshes);
 }
 
 fn cycle_msaa(input: Res<Input<KeyCode>>, mut msaa: ResMut<Msaa>) {

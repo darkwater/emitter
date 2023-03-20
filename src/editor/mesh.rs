@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
+use itertools::Itertools;
 use leafwing_input_manager::prelude::*;
 
 use super::{
@@ -20,14 +21,61 @@ pub struct MeshLine {
     pub end: Entity,
 }
 
+#[derive(Bundle)]
+pub struct MeshPointBundle {
+    pub mesh_point: MeshPoint,
+    pub collider: Collider,
+    pub collision_groups: CollisionGroups,
+    pub hover_effect: HoverEffect,
+    pub mesh: Handle<Mesh>,
+    pub material: Handle<StandardMaterial>,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
+    pub visibility: Visibility,
+    pub computed_visibility: ComputedVisibility,
+}
+
+impl MeshPointBundle {
+    fn new(asset_server: &AssetServer) -> Self {
+        Self {
+            mesh_point: MeshPoint,
+            collider: Collider::ball(1.),
+            collision_groups: CollisionGroups::new(
+                collision_groups::EDITOR_HANDLE,
+                collision_groups::NONE,
+            ),
+            hover_effect: HoverEffect,
+            // material_mesh_bundle: MaterialMeshBundle {
+            //     mesh: meshes.add(Mesh::from(LineList {
+            //         lines: vec![
+            //             (Vec3::NEG_X * 0.3, Vec3::X * 0.3),
+            //             (Vec3::NEG_Y * 0.3, Vec3::Y * 0.3),
+            //             (Vec3::NEG_Z * 0.3, Vec3::Z * 0.3),
+            //         ],
+            //     })),
+            //     transform: Transform::from_translation(position),
+            //     material: materials.add(LineMaterial { color: Color::PURPLE }),
+            //     ..default()
+            // },
+            mesh: asset_server.load("models/editor-handle.mdl.ron"),
+            material: Default::default(),
+            transform: Default::default(),
+            global_transform: Default::default(),
+            visibility: Default::default(),
+            computed_visibility: Default::default(),
+        }
+    }
+}
+
 pub fn spawn_point(
     input: Query<&ActionState<EditorAction>>,
     window: Query<&Window, With<EditorWindow>>,
     camera: Query<(&Camera, &GlobalTransform), With<EditorCamera>>,
     mut ui_state: ResMut<UiState>,
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<LineMaterial>>,
+    asset_server: Res<AssetServer>,
+    // mut meshes: ResMut<Assets<Mesh>>,
+    // mut materials: ResMut<Assets<LineMaterial>>,
 ) {
     if !input.single().just_pressed(EditorAction::SpawnHandle) {
         return;
@@ -62,26 +110,30 @@ pub fn spawn_point(
     let position = ray.get_point(distance).round();
 
     let entity = commands
-        .spawn((
-            MeshPoint,
-            // Transform::from_translation(position),
-            // GlobalTransform::default(),
-            Collider::ball(1.),
-            CollisionGroups::new(collision_groups::EDITOR_HANDLE, collision_groups::NONE),
-            HoverEffect,
-            MaterialMeshBundle {
-                mesh: meshes.add(Mesh::from(LineList {
-                    lines: vec![
-                        (Vec3::NEG_X * 0.3, Vec3::X * 0.3),
-                        (Vec3::NEG_Y * 0.3, Vec3::Y * 0.3),
-                        (Vec3::NEG_Z * 0.3, Vec3::Z * 0.3),
-                    ],
-                })),
-                transform: Transform::from_translation(position),
-                material: materials.add(LineMaterial { color: Color::PURPLE }),
-                ..default()
-            },
-        ))
+        // .spawn((
+        //     MeshPoint,
+        //     // Transform::from_translation(position),
+        //     // GlobalTransform::default(),
+        //     Collider::ball(1.),
+        //     CollisionGroups::new(collision_groups::EDITOR_HANDLE, collision_groups::NONE),
+        //     HoverEffect,
+        //     MaterialMeshBundle {
+        //         mesh: meshes.add(Mesh::from(LineList {
+        //             lines: vec![
+        //                 (Vec3::NEG_X * 0.3, Vec3::X * 0.3),
+        //                 (Vec3::NEG_Y * 0.3, Vec3::Y * 0.3),
+        //                 (Vec3::NEG_Z * 0.3, Vec3::Z * 0.3),
+        //             ],
+        //         })),
+        //         transform: Transform::from_translation(position),
+        //         material: materials.add(LineMaterial { color: Color::PURPLE }),
+        //         ..default()
+        //     },
+        // ))
+        .spawn(MeshPointBundle {
+            transform: Transform::from_translation(position),
+            ..MeshPointBundle::new(&asset_server)
+        })
         .id();
 
     ui_state.selected_entities.select_replace(entity);
@@ -112,10 +164,12 @@ pub fn spawn_line(
         return;
     }
 
-    commands.spawn((MeshLine { start, end }, MaterialMeshBundle {
-        mesh: meshes.add(Mesh::from(LineList { lines: vec![(Vec3::ZERO, Vec3::ONE)] })),
+    commands.spawn((MeshLine { start, end }, MaterialMeshBundle::<StandardMaterial> {
+        mesh: meshes.add(Mesh::from(LineList {
+            lines: vec![(Vec3::ZERO, Vec3::ONE)],
+            color: Color::WHITE,
+        })),
         transform: Transform::from_xyz(0., 0., 0.),
-        material: materials.add(LineMaterial { color: Color::PURPLE }),
         ..default()
     }));
 
@@ -123,23 +177,112 @@ pub fn spawn_line(
 }
 
 pub fn update_lines(
-    mut lines: Query<(&mut Transform, &Handle<LineMaterial>, &MeshLine)>,
+    mut lines: Query<(Entity, &mut Transform, &Handle<LineMaterial>, &MeshLine)>,
     entities: Query<&Transform, Without<MeshLine>>,
     ui_state: Res<UiState>,
     mut materials: ResMut<Assets<LineMaterial>>,
+    mut commands: Commands,
 ) {
-    for (mut transform, material, line) in lines.iter_mut() {
-        let start = entities.get(line.start).unwrap();
-        let end = entities.get(line.end).unwrap();
+    for (entity, mut transform, material, line) in lines.iter_mut() {
+        let Ok((start, end)) = entities.get(line.start).and_then(|start| {
+            entities.get(line.end).map(|end| (start, end))
+        }) else {
+            commands.entity(entity).despawn();
+            continue;
+        };
 
         transform.translation = start.translation;
         transform.scale = end.translation - start.translation;
 
-        materials.get_mut(material).unwrap().color = ui_state.new_mesh_props.color();
+        if let Some(material) = materials.get_mut(material) {
+            material.color = ui_state.new_mesh_props.color();
+        }
+    }
+}
+
+pub struct ExplodeMesh;
+
+pub fn explode_mesh(
+    mut event_reader: EventReader<ExplodeMesh>,
+    walls: Query<(&Transform, &Handle<LineMaterial>, &Handle<Mesh>), With<WallMesh>>,
+    ui_state: ResMut<UiState>,
+    asset_server: Res<AssetServer>,
+    materials: Res<Assets<LineMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut commands: Commands,
+) {
+    if event_reader.iter().next().is_none() {
+        return;
+    }
+
+    for entity in ui_state.selected_entities.iter() {
+        let (transform, line_material, mesh) = walls.get(entity).unwrap();
+
+        let mesh = meshes.get(mesh).unwrap();
+        let line_material = materials.get(line_material).unwrap();
+
+        let Some(attr) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else { continue };
+
+        let points = attr
+            .as_float3()
+            .unwrap()
+            .iter()
+            .map(|p| Vec3::from(*p))
+            .collect::<Vec<_>>();
+
+        let mut point_entities = vec![];
+
+        for point in &points {
+            let position = Transform::from_translation(transform.transform_point(*point));
+
+            if point_entities.iter().any(|&(pos, _ent)| pos == position) {
+                continue;
+            }
+
+            point_entities.push((
+                position,
+                commands
+                    .spawn(MeshPointBundle {
+                        transform: position,
+                        ..MeshPointBundle::new(&asset_server)
+                    })
+                    .id(),
+            ));
+        }
+
+        let lines = points.iter().tuple_windows();
+
+        for (from, to) in lines {
+            let (_, from_ent) = point_entities
+                .iter()
+                .find(|(pos, _ent)| pos.translation == *from)
+                .unwrap();
+
+            let (_, to_ent) = point_entities
+                .iter()
+                .find(|(pos, _ent)| pos.translation == *to)
+                .unwrap();
+
+            commands.spawn((MeshLine { start: *from_ent, end: *to_ent }, MaterialMeshBundle::<
+                StandardMaterial,
+            > {
+                mesh: meshes.add(Mesh::from(LineList {
+                    lines: vec![(Vec3::ZERO, Vec3::ONE)],
+                    color: line_material.color,
+                })),
+                transform: Transform::from_xyz(0., 0., 0.),
+                ..default()
+            }));
+        }
+
+        commands.entity(entity).despawn_recursive();
     }
 }
 
 pub struct Solidify;
+
+#[derive(Component)]
+pub struct WallMesh;
 
 pub fn solidify(
     mut event_reader: EventReader<Solidify>,
@@ -186,16 +329,20 @@ pub fn solidify(
     }
 
     commands.spawn((
-        MaterialMeshBundle {
-            mesh: meshes.add(LineList { lines }.into()),
-            material: materials.add(LineMaterial {
-                color: ui_state.new_mesh_props.color(),
-            }),
+        MaterialMeshBundle::<StandardMaterial> {
+            mesh: meshes.add(
+                LineList {
+                    lines,
+                    color: ui_state.new_mesh_props.color(),
+                }
+                .into(),
+            ),
             ..default()
         },
         RigidBody::Fixed,
         CollisionGroups::new(collision_groups::WALL, collision_groups::ALL),
         Collider::trimesh(collider_vertices, collider_indices),
+        WallMesh,
     ));
 }
 
@@ -207,23 +354,6 @@ pub fn delete_connected_lines(
     mut ui_state: ResMut<UiState>,
     mut commands: Commands,
 ) {
-    // let mut query = line_query
-    //     .iter(self.world)
-    //     .filter(|(_entity, line)| {
-    //         line.start == self.selected_entities.as_slice()[0]
-    //             || line.end == self.selected_entities.as_slice()[0]
-    //     })
-    //     .peekable();
-
-    // if query.peek().is_some() {
-    //     let button = ui.button("Delete lines");
-    //     if button.clicked() {
-    //         for (entity, _line) in query {
-    //             self.world.despawn(entity);
-    //         }
-    //     }
-    // }
-
     if event_reader.iter().next().is_none() {
         return;
     }

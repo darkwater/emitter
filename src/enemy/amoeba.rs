@@ -30,10 +30,12 @@ pub fn spawn_amoeba(
         commands.spawn((
             Name::new("Enemy"),
             Enemy,
-            MaterialMeshBundle {
-                mesh: meshes.add(Mesh::from(LineList { lines: circle(0.5, 6) })),
+            MaterialMeshBundle::<StandardMaterial> {
+                mesh: meshes.add(Mesh::from(LineList {
+                    lines: circle(0.5, 6),
+                    color: Color::GREEN,
+                })),
                 transform: *transform,
-                material: materials.add(LineMaterial { color: Color::GREEN }),
                 ..default()
             },
             CollisionGroups::new(collision_groups::ENEMY, collision_groups::ALL),

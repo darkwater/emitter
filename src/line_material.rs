@@ -40,16 +40,25 @@ impl Material for LineMaterial {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LineList {
     pub lines: Vec<(Vec3, Vec3)>,
+    pub color: Color,
 }
 
 impl From<LineList> for Mesh {
-    fn from(line: LineList) -> Self {
+    fn from(list: LineList) -> Self {
         // This tells wgpu that the positions are list of lines
         // where every pair is a start and end point
         let mut mesh = Mesh::new(PrimitiveTopology::LineList);
 
-        let vertices: Vec<_> = line.lines.into_iter().flat_map(|(a, b)| [a, b]).collect();
+        let colors: Vec<_> = list
+            .lines
+            .iter()
+            .flat_map(|(_, _)| [list.color.as_linear_rgba_f32(), list.color.as_linear_rgba_f32()])
+            .collect();
+
+        let vertices: Vec<_> = list.lines.into_iter().flat_map(|(a, b)| [a, b]).collect();
+
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
         mesh
     }
 }
