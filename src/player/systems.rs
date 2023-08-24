@@ -53,12 +53,31 @@ pub fn shoot(mut query: Query<(&PlayerShip, &ActionState<PlayerAction>, &mut Wea
     }
 }
 
-pub fn move_aim_target(
+pub fn move_aim_target_gamepad(
+    player: Query<(&Transform, &ActionState<PlayerAction>), With<PlayerShip>>,
+    mut player_aim_target: Query<&mut Transform, (With<PlayerAimTarget>, Without<PlayerShip>)>,
+) {
+    let mut player_aim_target = player_aim_target.single_mut();
+    for (transform, action_state) in player.iter() {
+        if action_state.pressed(PlayerAction::Aim) {
+            let axis_pair = action_state.clamped_axis_pair(PlayerAction::Aim).unwrap();
+            let vec = axis_pair.xy().clamp_length_max(1.);
+
+            let position = transform.translation + vec.extend(0.) * 5.;
+
+            player_aim_target.translation = position;
+        }
+    }
+}
+
+pub fn move_aim_target_mouse(
     window: Query<&Window, With<PlayerWindow>>,
     camera: Query<(&Camera, &GlobalTransform), With<PlayerFollower>>,
     mut player_aim_target: Query<&mut Transform, With<PlayerAimTarget>>,
 ) {
-    let Ok(window) = window.get_single() else { return };
+    let Ok(window) = window.get_single() else {
+        return;
+    };
     let (camera, camera_transform) = camera.single();
     let mut player_aim_target = player_aim_target.single_mut();
 
@@ -66,10 +85,9 @@ pub fn move_aim_target(
         return;
     };
 
-    let Some(ray) = camera
-        .viewport_to_world(camera_transform, cursor_position) else {
-            return;
-        };
+    let Some(ray) = camera.viewport_to_world(camera_transform, cursor_position) else {
+        return;
+    };
 
     let Some(distance) = ray.intersect_plane(Vec3::ZERO, Vec3::Z) else {
         return;

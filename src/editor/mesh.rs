@@ -81,7 +81,9 @@ pub fn spawn_point(
         return;
     }
 
-    let Ok(window) = window.get_single() else { return };
+    let Ok(window) = window.get_single() else {
+        return;
+    };
     let (camera, camera_transform) = camera.single();
 
     let Some(cursor_position) = window.cursor_position() else {
@@ -92,13 +94,13 @@ pub fn spawn_point(
 
     let Some(ray) = camera.viewport_to_world(
         camera_transform,
-        cursor_position - Vec2::new(
-            viewport.physical_position.x as f32,
-            (
-                window.physical_height() -
-                (viewport.physical_position.y + viewport.physical_size.y)
-            ) as f32,
-        ),
+        cursor_position
+            - Vec2::new(
+                viewport.physical_position.x as f32,
+                (window.physical_height()
+                    - (viewport.physical_position.y + viewport.physical_size.y))
+                    as f32,
+            ),
     ) else {
         return;
     };
@@ -152,8 +154,12 @@ pub fn spawn_line(
     }
 
     let UiState { ref mut selected_entities, .. } = *ui_state;
-    let Some(end) = hover_target.entity else { return };
-    let Some(start) = selected_entities.iter().next() else { return };
+    let Some(end) = hover_target.entity else {
+        return;
+    };
+    let Some(start) = selected_entities.iter().next() else {
+        return;
+    };
 
     if start == end {
         return;
@@ -183,9 +189,10 @@ pub fn update_lines(
     mut commands: Commands,
 ) {
     for (entity, mut transform, material, line) in lines.iter_mut() {
-        let Ok((start, end)) = entities.get(line.start).and_then(|start| {
-            entities.get(line.end).map(|end| (start, end))
-        }) else {
+        let Ok((start, end)) = entities
+            .get(line.start)
+            .and_then(|start| entities.get(line.end).map(|end| (start, end)))
+        else {
             commands.entity(entity).despawn();
             continue;
         };
@@ -199,6 +206,7 @@ pub fn update_lines(
     }
 }
 
+#[derive(Event)]
 pub struct ExplodeMesh;
 
 pub fn explode_mesh(
@@ -220,7 +228,9 @@ pub fn explode_mesh(
         let mesh = meshes.get(mesh).unwrap();
         let line_material = materials.get(line_material).unwrap();
 
-        let Some(attr) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else { continue };
+        let Some(attr) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else {
+            continue;
+        };
 
         let points = attr
             .as_float3()
@@ -278,6 +288,7 @@ pub fn explode_mesh(
     }
 }
 
+#[derive(Event)]
 pub struct Solidify;
 
 #[derive(Component)]
@@ -344,6 +355,7 @@ pub fn solidify(
     ));
 }
 
+#[derive(Event)]
 pub struct DeleteConnectedLines;
 
 pub fn delete_connected_lines(

@@ -17,6 +17,7 @@ impl Plugin for ScenePlugin {
     }
 }
 
+#[derive(Event)]
 pub struct SaveScene;
 
 // #[derive(Reflect, Component, Default)]

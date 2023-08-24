@@ -8,8 +8,8 @@ pub struct BulletPlugin;
 
 impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_particle_effect)
-            .add_system(collide_bullets)
+        app.add_systems(Startup, setup_particle_effect)
+            .add_systems(Update, collide_bullets)
             .register_type::<Bullet>();
     }
 }
@@ -24,53 +24,56 @@ pub struct Bullet {
 pub struct BulletImpactEffect;
 
 fn setup_particle_effect(mut effects: ResMut<Assets<EffectAsset>>, mut commands: Commands) {
-    let mut color_gradient1 = Gradient::new();
-    color_gradient1.add_key(0.0, Vec4::new(100.0, 0.0, 0.0, 1.0));
-    color_gradient1.add_key(0.1, Vec4::new(50.0, 0.0, 0.0, 1.0));
-    color_gradient1.add_key(0.9, Vec4::new(20.0, 0.0, 0.0, 1.0));
-    color_gradient1.add_key(1.0, Vec4::new(2.0, 0.0, 0.0, 0.0));
+    let mut color_gradient = Gradient::new();
+    color_gradient.add_key(0., Vec4::new(100., 0., 0., 1.));
+    color_gradient.add_key(0.1, Vec4::new(50., 0., 0., 1.));
+    color_gradient.add_key(0.9, Vec4::new(20., 0., 0., 1.));
+    color_gradient.add_key(1., Vec4::new(2., 0., 0., 0.));
 
-    let mut size_gradient1 = Gradient::new();
-    size_gradient1.add_key(0.0, Vec2::splat(0.10));
-    size_gradient1.add_key(0.3, Vec2::splat(0.05));
-    size_gradient1.add_key(1.0, Vec2::splat(0.0));
+    let mut size_gradient = Gradient::new();
+    size_gradient.add_key(0., Vec2::splat(0.1));
+    size_gradient.add_key(0.3, Vec2::splat(0.05));
+    size_gradient.add_key(1., Vec2::splat(0.));
 
-    let effect1 = effects.add(
-        EffectAsset {
-            name: "Bullet Impact".to_string(),
-            capacity: 32768,
-            spawner: Spawner::once(50.0.into(), false),
-            ..Default::default()
-        }
-        .init(InitPositionSphereModifier {
-            center: Vec3::ZERO,
-            radius: 0.4,
-            dimension: ShapeDimension::Volume,
-        })
-        .init(InitVelocitySphereModifier {
-            center: Vec3::ZERO,
-            // Give a bit of variation by randomizing the initial speed
-            speed: Value::Uniform((1., 5.)),
-        })
-        .init(InitLifetimeModifier {
-            // Give a bit of variation by randomizing the lifetime per particle
-            lifetime: Value::Uniform((0.2, 0.8)),
-        })
-        .init(InitAgeModifier {
-            // Give a bit of variation by randomizing the age per particle. This will control the
-            // starting color and starting size of particles.
-            age: Value::Uniform((0.0, 0.07)),
-        })
-        // .update(LinearDragModifier { drag: 5. })
-        // .update(AccelModifier::constant(Vec3::new(0., -8., 0.)))
-        .render(ColorOverLifetimeModifier { gradient: color_gradient1 })
-        .render(SizeOverLifetimeModifier { gradient: size_gradient1 }),
+    let writer = ExprWriter::default();
+
+    let init_pos = SetPositionSphereModifier {
+        center: writer.lit(Vec3::ZERO).expr(),
+        radius: writer.lit(0.4).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+
+    let init_vel = SetVelocitySphereModifier {
+        center: writer.lit(Vec3::ZERO).expr(),
+        // Give a bit of variation by randomizing the initial speed
+        speed: writer.lit(1.).uniform(writer.lit(5.)).expr(),
+    };
+
+    let init_lifetime = SetAttributeModifier::new(
+        Attribute::LIFETIME,
+        writer.lit(0.2).uniform(writer.lit(0.8)).expr(),
+    );
+
+    let init_age =
+        SetAttributeModifier::new(Attribute::AGE, writer.lit(0.).uniform(writer.lit(0.7)).expr());
+
+    let effect = effects.add(
+        EffectAsset::new(32768, Spawner::once(50.0.into(), false), writer.finish())
+            .init(init_pos)
+            .init(init_vel)
+            .init(init_lifetime)
+            .init(init_age)
+            .render(ColorOverLifetimeModifier { gradient: color_gradient })
+            .render(SizeOverLifetimeModifier {
+                gradient: size_gradient,
+                screen_space_size: false,
+            }),
     );
 
     commands.spawn((
         Name::new("Bullet Impact Effect"),
         ParticleEffectBundle {
-            effect: ParticleEffect::new(effect1),
+            effect: ParticleEffect::new(effect),
             transform: Transform::IDENTITY,
             ..Default::default()
         },
@@ -86,7 +89,7 @@ fn collide_bullets(
     context: Res<RapierContext>,
     mut commands: Commands,
     mut impact_effect: Query<
-        (&mut ParticleEffect, &mut Transform),
+        (&mut ParticleEffect, &mut EffectSpawner, &mut Transform),
         (With<BulletImpactEffect>, Without<Bullet>),
     >,
 ) {
@@ -100,10 +103,11 @@ fn collide_bullets(
             true,
             QueryFilter::default().groups(CollisionGroups {
                 memberships: collision_groups::BULLET,
-                filters: collision_groups::ALL
-                    & !collision_groups::BULLET,
+                filters: collision_groups::ALL & !collision_groups::BULLET,
             }),
-        ) else { continue };
+        ) else {
+            continue;
+        };
 
         debug!("bullet hit entity: {:?}", bullet_entity);
         debug!("bullet hit intersection: {:?}", intersection);
@@ -115,10 +119,11 @@ fn collide_bullets(
             }
         }
 
-        let (mut effect, mut effect_transform) = impact_effect.single_mut();
+        let (mut effect, mut spawner, mut effect_transform) = impact_effect.single_mut();
         effect_transform.translation = intersection.point;
         effect_transform.look_to(intersection.normal, Vec3::Z);
-        effect.maybe_spawner().unwrap().reset();
+        spawner.reset();
+        println!("spawning");
 
         commands.entity(bullet_entity).despawn();
 

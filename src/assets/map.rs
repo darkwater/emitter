@@ -1,13 +1,13 @@
 use bevy::{
     asset::{AssetLoader, LoadedAsset},
     prelude::Transform,
-    reflect::TypeUuid,
+    reflect::{TypePath, TypeUuid},
 };
 use serde::{Deserialize, Serialize};
 
 use crate::line_material::LineList;
 
-#[derive(Serialize, Deserialize, TypeUuid)]
+#[derive(Serialize, Deserialize, TypeUuid, TypePath)]
 #[uuid = "0443de5c-e5a4-4cba-a976-3912071cc8cb"]
 pub struct Map {
     pub map_meshes: Vec<MapMesh>,

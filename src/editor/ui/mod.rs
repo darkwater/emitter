@@ -32,17 +32,13 @@ pub struct EditorUiPlugin;
 impl Plugin for EditorUiPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<NewMeshProperties>()
-            .add_system(
+            .add_systems(
+                PostUpdate,
                 show_ui_system
-                    .in_base_set(CoreSet::PostUpdate)
                     .before(EguiSet::ProcessOutput)
                     .before(bevy::transform::TransformSystem::TransformPropagate),
             )
-            .add_system(
-                set_camera_viewport
-                    .in_base_set(CoreSet::PostUpdate)
-                    .after(show_ui_system),
-            );
+            .add_systems(PostUpdate, set_camera_viewport.after(show_ui_system));
     }
 }
 
@@ -68,7 +64,10 @@ pub enum InspectorSelection {
 fn show_ui_system(world: &mut World) {
     let Ok(egui_context) = world
         .query_filtered::<&mut EguiContext, With<EditorWindow>>()
-        .get_single(world) else { return };
+        .get_single(world)
+    else {
+        return;
+    };
     let mut egui_context = egui_context.clone();
 
     world.resource_scope::<UiTreeState, _>(|world, mut tree_state| {
@@ -97,7 +96,9 @@ fn set_camera_viewport(
 ) {
     let mut cam = cameras.single_mut();
 
-    let Ok(window) = primary_window.get_single() else { return };
+    let Ok(window) = primary_window.get_single() else {
+        return;
+    };
 
     let scale_factor = window.scale_factor() * egui_settings.scale_factor;
 
@@ -142,7 +143,7 @@ impl Default for UiState {
     }
 }
 
-#[derive(Reflect, FromReflect)]
+#[derive(Reflect)]
 pub struct NewMeshProperties {
     pub color: Color,
     pub intensity: f32,
@@ -254,14 +255,26 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 InspectorSelection::None => {}
             },
             EguiWindow::MapTools => {
-                ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Translate, "Translate");
-                ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Rotate, "Rotate");
-                ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Scale, "Scale");
+                egui::CollapsingHeader::new("Gizmo mode")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.radio_value(
+                            &mut self.state.gizmo_mode,
+                            GizmoMode::Translate,
+                            "Translate",
+                        );
+                        ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Rotate, "Rotate");
+                        ui.radio_value(&mut self.state.gizmo_mode, GizmoMode::Scale, "Scale");
+                    });
 
                 ui.separator();
 
-                let mut debug_render = self.world.resource_mut::<DebugRenderContext>();
-                ui.checkbox(&mut debug_render.enabled, "Show hitboxes");
+                egui::CollapsingHeader::new("Debug visuals")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        let mut debug_render = self.world.resource_mut::<DebugRenderContext>();
+                        ui.checkbox(&mut debug_render.enabled, "Show hitboxes");
+                    });
 
                 // }
                 // EguiWindow::Options => {
@@ -284,8 +297,11 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                     if ui.button("Delete connected lines").clicked() {
                         self.world.send_event(DeleteConnectedLines);
                     }
-                } else if line_query.iter(self.world).next().is_some() {
+
                     ui.separator();
+                }
+
+                if line_query.iter(self.world).next().is_some() {
                     let button = ui.button("Solidify mesh");
                     if button.clicked() {
                         self.world.send_event(Solidify);
@@ -306,12 +322,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                         egui::Slider::new(&mut self.state.new_mesh_props.intensity, 0.1..=10.)
                             .step_by(0.5)
                             .text("Intensity"),
-                    );
-
-                    bevy_inspector_egui::reflect_inspector::ui_for_value(
-                        &mut self.state.new_mesh_props,
-                        ui,
-                        &type_registry,
                     );
                 }
             }
@@ -419,22 +429,24 @@ fn draw_gizmo(
     let projection_matrix = projection.get_projection_matrix();
 
     for selected in selected_entities.iter() {
-        let Some(transform) = world.get::<Transform>(selected) else { continue };
+        let Some(transform) = world.get::<Transform>(selected) else {
+            continue;
+        };
         let model_matrix = transform.compute_matrix();
 
         let Some(result) = egui_gizmo::Gizmo::new(selected)
-                    .model_matrix(model_matrix.to_cols_array_2d())
-                    .view_matrix(view_matrix.to_cols_array_2d())
-                    .projection_matrix(projection_matrix.to_cols_array_2d())
-                    .orientation(egui_gizmo::GizmoOrientation::Global)
-                    .snapping(true)
-                    .snap_distance(1.)
-                    .mode(gizmo_mode)
-                    .visuals(GizmoVisuals {
-                        ..default()
-                    })
-                    .interact(ui)
-                else { continue };
+            .model_matrix(model_matrix.to_cols_array_2d())
+            .view_matrix(view_matrix.to_cols_array_2d())
+            .projection_matrix(projection_matrix.to_cols_array_2d())
+            .orientation(egui_gizmo::GizmoOrientation::Global)
+            .snapping(true)
+            .snap_distance(1.)
+            .mode(gizmo_mode)
+            .visuals(GizmoVisuals { ..default() })
+            .interact(ui)
+        else {
+            continue;
+        };
 
         let mut transform = world.get_mut::<Transform>(selected).unwrap();
         *transform = Transform {

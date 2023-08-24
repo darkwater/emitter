@@ -69,7 +69,7 @@ pub struct EditorCameraFocus {
     distance: f32,
 }
 
-#[derive(Resource, Default, Reflect, FromReflect)]
+#[derive(Resource, Default, Reflect)]
 pub struct CursorHoveringEntity {
     pub entity: Option<Entity>,
 }
@@ -234,7 +234,9 @@ fn update_hover_entity(
     mut hovering_entity: ResMut<CursorHoveringEntity>,
     mut ui_state: ResMut<UiState>,
 ) {
-    let Ok(window) = window.get_single() else { return };
+    let Ok(window) = window.get_single() else {
+        return;
+    };
     let (camera, camera_transform) = camera.single();
 
     let Some(cursor_position) = window.cursor_position() else {
@@ -264,10 +266,7 @@ fn update_hover_entity(
 
     ui_state.hovering_camera = true;
 
-    let Some(ray) = camera.viewport_to_world(
-        camera_transform,
-        cursor_position,
-    ) else {
+    let Some(ray) = camera.viewport_to_world(camera_transform, cursor_position) else {
         hovering_entity.entity = None;
         return;
     };

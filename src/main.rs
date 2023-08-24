@@ -1,8 +1,11 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
+use std::time::Duration;
+
 use assets::AssetsPlugin;
 use bevy::{
+    asset::ChangeWatcher,
     core_pipeline::{
         bloom::BloomSettings, clear_color::ClearColorConfig, tonemapping::Tonemapping,
     },
@@ -32,6 +35,7 @@ mod bullet;
 mod collision_groups;
 mod damageable;
 mod editor;
+mod egui_style;
 mod enemy;
 mod line_material;
 mod player;
@@ -58,9 +62,10 @@ fn main() {
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         cursor: {
-                            let mut cursor = Cursor::default();
-                            cursor.icon = CursorIcon::Crosshair;
-                            cursor
+                            Cursor {
+                                icon: CursorIcon::Crosshair,
+                                ..default()
+                            }
                         },
                         present_mode: PresentMode::AutoNoVsync,
                         mode: WindowMode::Windowed,
@@ -72,34 +77,38 @@ fn main() {
                     }),
                     ..default()
                 })
-                .set(AssetPlugin { watch_for_changes: true, ..default() }),
+                .set(AssetPlugin {
+                    watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)),
+                    ..default()
+                }),
         )
-        .add_plugin(MaterialPlugin::<LineMaterial>::default())
+        .add_plugins(MaterialPlugin::<LineMaterial>::default())
         .register_type::<LineMaterial>()
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        .add_plugin(RapierDebugRenderPlugin { enabled: false, ..default() })
-        .add_plugin(HanabiPlugin)
-        .add_plugin(BigBrainPlugin)
-        .add_plugin(InputManagerPlugin::<PlayerAction>::default())
-        .add_plugin(InputManagerPlugin::<EditorAction>::default())
-        .add_plugin(bevy_egui::EguiPlugin)
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugins(RapierDebugRenderPlugin { enabled: false, ..default() })
+        .add_plugins(HanabiPlugin)
+        .add_plugins(BigBrainPlugin::new(PreUpdate))
+        .add_plugins(InputManagerPlugin::<PlayerAction>::default())
+        .add_plugins(InputManagerPlugin::<EditorAction>::default())
+        .add_plugins(bevy_egui::EguiPlugin)
         .insert_resource(ToggleActions::<PlayerAction>::DISABLED)
         .insert_resource(ToggleActions::<EditorAction>::DISABLED)
-        .add_startup_system(setup_windows_cameras)
-        .add_startup_system(disable_gravity)
-        .add_startup_system(load_scene)
+        .add_systems(Startup, setup_windows_cameras)
+        .add_systems(Startup, disable_gravity)
+        .add_systems(Startup, load_scene)
+        .add_systems(Update, egui_style::set_egui_style)
         // .add_startup_system(map::spawn_map)
-        .add_system(cycle_msaa)
-        .add_system(despawn_if_dead)
-        .add_system(handle_window_focus_events)
-        .add_system(replace_standard_material)
-        .add_plugin(AssetsPlugin)
-        .add_plugin(PlayerPlugin)
-        .add_plugin(WeaponPlugin)
-        .add_plugin(BulletPlugin)
-        .add_plugin(EnemyPlugin)
-        .add_plugin(ZLockPlugin)
-        .add_plugin(EditorPlugin)
+        .add_systems(Update, cycle_msaa)
+        .add_systems(Update, despawn_if_dead)
+        .add_systems(Update, handle_window_focus_events)
+        .add_systems(Update, replace_standard_material)
+        .add_plugins(AssetsPlugin)
+        .add_plugins(PlayerPlugin)
+        .add_plugins(WeaponPlugin)
+        .add_plugins(BulletPlugin)
+        .add_plugins(EnemyPlugin)
+        .add_plugins(ZLockPlugin)
+        .add_plugins(EditorPlugin)
         .run();
 }
 
@@ -109,7 +118,7 @@ fn replace_standard_material(
     mut line_materials: ResMut<Assets<LineMaterial>>,
 ) {
     for entity in query.iter_mut() {
-        println!("replacing");
+        println!("replacing with line material");
         commands
             .entity(entity)
             .remove::<Handle<StandardMaterial>>()

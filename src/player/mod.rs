@@ -21,13 +21,14 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(startup::spawn_player)
-            .add_system(systems::move_player_ship)
-            .add_system(systems::apply_ship_engine)
-            .add_system(systems::follow_player_ship)
-            .add_system(systems::shoot)
-            .add_system(systems::move_aim_target)
-            .add_system(systems::aim_player_ship)
+        app.add_systems(Startup, startup::spawn_player)
+            .add_systems(Update, systems::move_player_ship)
+            .add_systems(Update, systems::apply_ship_engine)
+            .add_systems(Update, systems::follow_player_ship)
+            .add_systems(Update, systems::shoot)
+            .add_systems(Update, systems::move_aim_target_gamepad)
+            .add_systems(Update, systems::move_aim_target_mouse)
+            .add_systems(Update, systems::aim_player_ship)
             .register_type::<ShipEngine>();
     }
 }
