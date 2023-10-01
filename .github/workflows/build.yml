@@ -61,7 +61,7 @@ jobs:
 
       - name: Artifact | Upload
         if: matrix.os != 'windows-latest'
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.output }}
           path: ${{ matrix.output }}
