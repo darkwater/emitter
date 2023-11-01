@@ -20,7 +20,7 @@ itertools = "0.11.0"
 leafwing-input-manager = { version = "0.10.0", features = ["egui"] }
 rand = "0.8.5"
 ron = "0.8.1"
-serde = "1.0.185"
+serde = "1.0.190"
 
 [profile.dev]
 opt-level = 1
